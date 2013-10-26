@@ -1,0 +1,168 @@
+/*
+  QR Code manipulation and event processing
+  Copyright (C) 2008-2013 Sylvain Hallé
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package ca.uqac.lif.qr;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
+
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+
+import ca.uqac.info.buffertannen.message.*;
+import ca.uqac.info.buffertannen.protocol.*;
+import ca.uqac.info.util.FileReadWrite;
+
+public class BtQrSender
+{
+  
+  Sender m_sender;
+  
+  public BtQrSender(int frame_length)
+  {
+    super();
+    m_sender = new Sender();
+    m_sender.setFrameMaxLength(frame_length);
+  }
+  
+  protected void animate(String out_filename, int frame_rate, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
+  {
+    GifAnimator animator = createAnimation(frame_rate, image_size, format, level);
+    animator.getAnimation(frame_rate, out_filename);
+  }
+  
+  protected byte[] animate(int frame_delay, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
+  {
+    GifAnimator animator = createAnimation(frame_delay, image_size, format, level);
+    return animator.getAnimation(frame_delay);
+  }
+  
+  protected GifAnimator createAnimation(int frame_delay, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
+  {
+    GifAnimator animator = new GifAnimator();
+    BitSequence bs = m_sender.pollBitSequence();
+    ZXingReadWrite reader_writer = new ZXingReadWrite();
+    reader_writer.setBarcodeFormat(format);
+    reader_writer.setErrorCorrectionLevel(level);
+    boolean first_file = true;
+    while (bs != null)
+    {
+      try
+      {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        //System.out.println("Written: " + bs.toString());
+        reader_writer.writeCode(out, bs.toBase64(), image_size, image_size);
+        animator.addImage(out.toByteArray());
+      } catch (WriterException e)
+      {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      } catch (IOException e)
+      {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+      if (!first_file)
+      {
+        // Move cursor up 11 lines
+        System.err.print("\u001B[11A\r");
+      }
+      else
+      {
+        first_file = false;
+      }
+      printWriteStatistics(System.err, frame_delay);
+      bs = m_sender.pollBitSequence();
+    }
+    return animator;
+  }
+  
+  protected void setSchema(int number, String file_contents) throws ReadException
+  {
+    m_sender.setSchema(number, file_contents);
+  }
+  
+  protected void setSchema(int number, File f) throws IOException, ReadException
+  {
+    String contents = FileReadWrite.readFile(f);
+    setSchema(number, contents);
+  }
+  
+  protected void readMessages(File f)
+  {
+    try
+    {
+      String contents = FileReadWrite.readFile(f);
+      readMessages(contents);
+    } catch (IOException e)
+    {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+  
+  protected void readMessages(String file_contents)
+  {
+    String[] parts = file_contents.split("\n---\n");
+    for (String part : parts)
+    {
+      part = part.trim();
+      int first_space = part.indexOf(" ");
+      if (first_space < 0)
+        continue;
+      String left = part.substring(0, first_space);
+      part = part.substring(first_space + 1);
+      int schema_number = Integer.parseInt(left);
+      try
+      {
+        m_sender.addMessage(schema_number, part);
+      } catch (ReadException e)
+      {
+        // Ignore if cannot read
+        System.err.println("Could not add message");
+        continue;
+      }
+      catch (UnknownSchemaException e)
+      {
+        System.err.println("Unknown schema");
+        continue;
+      }
+    }
+  }
+  
+  protected void printWriteStatistics(PrintStream out, int frame_delay)
+  {
+    int raw_bits = m_sender.getNumberOfRawBits();
+    int total_frames = m_sender.getNumberOfFrames();
+    int total_size = m_sender.getNumberOfDeltaSegmentsBits() + m_sender.getNumberOfMessageSegmentsBits();
+    //out.printf("Written to %s                  \n", output_filename);
+    out.println("----------------------------------------------------");
+    out.printf(" Frames sent:           %03d (%02.1f sec.)\n", total_frames, (float) total_frames * (float) frame_delay / 100f);
+    out.println(" Messages sent:         " + (m_sender.getNumberOfMessageSegments() + m_sender.getNumberOfDeltaSegments()) + " (" + total_size + " bits)     ");
+    out.println("   Message segments:    " + m_sender.getNumberOfMessageSegments() + " (" + m_sender.getNumberOfMessageSegmentsBits() + " bits, " + m_sender.getNumberOfMessageSegmentsBits() / m_sender.getNumberOfMessageSegments() + " bits/seg.)     ");
+    out.println("   Delta segments:      " + m_sender.getNumberOfDeltaSegments() + " (" + m_sender.getNumberOfDeltaSegmentsBits() + " bits, " + m_sender.getNumberOfDeltaSegmentsBits() / m_sender.getNumberOfDeltaSegments() + " bits/seg.)     ");
+    out.println("   Schema segments:     " + m_sender.getNumberOfSchemaSegments() + " (" + m_sender.getNumberOfSchemaSegmentsBits() + " bits, " + m_sender.getNumberOfSchemaSegmentsBits() / m_sender.getNumberOfSchemaSegments() + " bits/seg.)     ");
+    out.println(" Bandwidth:");
+    out.println("   Raw (with retrans.): "+ raw_bits + " bits (" + (raw_bits * frame_delay * total_frames) / 100 + " bits/sec.)     ");
+    out.println("   Actual:              " + total_size + " bits (" + (total_size * frame_delay * total_frames) / 100 + " bits/sec.)     ");
+    out.println("----------------------------------------------------\n");       
+  }
+
+}

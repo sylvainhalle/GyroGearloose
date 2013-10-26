@@ -1,0 +1,11 @@
+FixedMap {
+  "deadlyvelocity" : Integer(8,5),
+  "pingus" : List [
+    FixedMap {
+      "id" : Integer(7),
+      "x" : Integer(11,5),
+      "y" : Integer(11,5),
+      "status" : Enum {"basher", "blocker", "walker", "climber", "digger"}
+    }
+  ]
+}

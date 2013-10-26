@@ -1,0 +1,6 @@
+FixedMap {
+  "keyboard-x" : Integer(8),
+  "keyboard-y" : Integer(8),
+  "button-1" : Integer(1),
+  "button-2" : Integer(1)
+}
