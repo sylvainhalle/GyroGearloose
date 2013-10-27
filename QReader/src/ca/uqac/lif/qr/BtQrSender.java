@@ -17,10 +17,14 @@
  */
 package ca.uqac.lif.qr;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+
+import javax.imageio.ImageIO;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
@@ -32,14 +36,102 @@ import ca.uqac.info.util.FileReadWrite;
 
 public class BtQrSender
 {
+  /**
+   * The BufferTannen sender used to build the frames
+   */
+  protected Sender m_sender;
   
-  Sender m_sender;
+  /**
+   * Whether to display stats live
+   */
+  protected boolean m_displayStats = true;
   
-  public BtQrSender(int frame_length)
+  /**
+   * A code writer
+   */
+  protected ZXingReadWrite m_readerWriter;
+  
+  /**
+   * Whether this is the first frame displayed
+   */
+  protected boolean m_firstFrame;
+  
+  /**
+   * The size of the images to draw
+   */
+  protected int m_imageSize = 300;
+  
+  /**
+   * The error correction level to use when producing codes
+   */
+  ErrorCorrectionLevel m_level = ErrorCorrectionLevel.L;
+  
+  /**
+   * The type of bar code to generate
+   */
+  BarcodeFormat m_format = BarcodeFormat.QR_CODE;
+  
+  /**
+   * The delay (in 1/100s of a second) between each frame
+   */
+  protected int m_frameDelay = 13; // = 8 fps
+  
+  public BtQrSender(int frame_length, boolean display_stats, int image_size, int frame_delay, BarcodeFormat format, ErrorCorrectionLevel level)
   {
     super();
     m_sender = new Sender();
     m_sender.setFrameMaxLength(frame_length);
+    m_displayStats = display_stats;
+    m_imageSize = image_size;
+    m_frameDelay = frame_delay;
+    m_format = format;
+    m_level = level;
+    m_readerWriter = new ZXingReadWrite();
+    m_readerWriter.setBarcodeFormat(format);
+    m_readerWriter.setErrorCorrectionLevel(level);
+    m_firstFrame = true;
+  }
+  
+  public BufferedImage pollNextImage()
+  {
+    BufferedImage image_out = null;
+    BitSequence bs = m_sender.pollBitSequence();
+    if (bs == null)
+    {
+      // Nothing to read from sender at this moment
+      return image_out;
+    }
+    try
+    {
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      m_readerWriter.writeCode(out, bs.toBase64(), m_imageSize, m_imageSize);
+      ByteArrayInputStream in = new ByteArrayInputStream(out.toByteArray());
+      image_out = ImageIO.read(in);
+    }
+    catch (WriterException e)
+    {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+    catch (IOException e)
+    {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+    if (m_displayStats)
+    {
+      if (!m_firstFrame)
+      {
+        // Move cursor up 11 lines
+        System.err.print("\u001B[11A\r");
+      }
+      else
+      {
+        m_firstFrame = false;
+      }
+      printWriteStatistics(System.err, m_frameDelay);
+    }
+    return image_out;
   }
   
   protected void animate(String out_filename, int frame_rate, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
@@ -79,18 +171,22 @@ public class BtQrSender
         // TODO Auto-generated catch block
         e.printStackTrace();
       }
-      if (!first_file)
+      if (m_displayStats)
       {
-        // Move cursor up 11 lines
-        System.err.print("\u001B[11A\r");
+        if (!first_file)
+        {
+          // Move cursor up 11 lines
+          System.err.print("\u001B[11A\r");
+        }
+        else
+        {
+          first_file = false;
+        }
+        printWriteStatistics(System.err, frame_delay);
       }
-      else
-      {
-        first_file = false;
-      }
-      printWriteStatistics(System.err, frame_delay);
       bs = m_sender.pollBitSequence();
     }
+    printWriteStatistics(System.err, frame_delay);
     return animator;
   }
   

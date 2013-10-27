@@ -213,6 +213,12 @@ public class BtQrReader
             "Tells reader that input is a pure binary image of a code")
             .create();
     options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("window")
+        .withDescription(
+            "Display codes onscreen in a window")
+            .create();
+    options.addOption(opt);
     return options;
   }
 
@@ -504,6 +510,7 @@ public class BtQrReader
     String output_filename = ""; // If not specified, will output to stdout
     BarcodeFormat format = BarcodeFormat.QR_CODE;
     ErrorCorrectionLevel level = ErrorCorrectionLevel.L;
+    boolean animate_live = false, display_stats = true;
     
     @SuppressWarnings("unchecked")
     List<String> remaining_args = c_line.getArgList();
@@ -523,6 +530,14 @@ public class BtQrReader
     if (c_line.hasOption("output"))
     {
       output_filename = c_line.getOptionValue("output");
+    }
+    if (c_line.hasOption("window"))
+    {
+      animate_live = true;
+    }
+    if (c_line.hasOption("nodisplay"))
+    {
+      display_stats = false;
     }
     if (c_line.hasOption("level"))
     {
@@ -569,7 +584,7 @@ public class BtQrReader
       }
     }
     
-    BtQrSender animator = new BtQrSender(frame_size);
+    BtQrSender animator = new BtQrSender(frame_size, display_stats, image_size, 100/fps, format, level);
     String trace_filename = "";
     if (remaining_args.size() < 2)
     {
@@ -600,16 +615,36 @@ public class BtQrReader
     animator.readMessages(new File(trace_filename));
     if (output_filename.isEmpty())
     {
-      // Output image to stdout
-      byte[] image = animator.animate(100/fps, image_size, format, level);
-      try
+      if (animate_live)
       {
-        System.out.write(image);
+        // Animate directly in a window
+        CodeDisplayFrame m_window = new CodeDisplayFrame(100/fps, animator);
+        m_window.setVisible(true);
+        while (m_window.isVisible())
+        {
+          try
+          {
+            Thread.sleep(1000);
+          } catch (InterruptedException e)
+          {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+          }
+        }
       }
-      catch (IOException e)
+      else
       {
-        System.err.println("ERROR writing image to stdout");
-        System.exit(ERR_IO);
+        // Output image to stdout
+        byte[] image = animator.animate(100/fps, image_size, format, level);
+        try
+        {
+          System.out.write(image);
+        }
+        catch (IOException e)
+        {
+          System.err.println("ERROR writing image to stdout");
+          System.exit(ERR_IO);
+        }        
       }
     }
     else
