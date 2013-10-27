@@ -22,7 +22,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
-//import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.List;
 
@@ -218,6 +217,20 @@ public class BtQrReader
         .withDescription(
             "Display codes onscreen in a window")
             .create();
+    options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("stdin")
+        .withDescription(
+            "Read trace from stdin")
+            .create();
+    options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("pipe")
+        .withArgName("file")
+        .hasArg()
+        .withDescription(
+            "Read trace from named pipe file")
+            .create("p");
     options.addOption(opt);
     return options;
   }
@@ -507,10 +520,11 @@ public class BtQrReader
   protected static void animate(CommandLine c_line)
   {
     int image_size = 300, frame_size = 2000, fps = 8;
-    String output_filename = ""; // If not specified, will output to stdout
+    String output_filename = "", pipe_filename = "";
     BarcodeFormat format = BarcodeFormat.QR_CODE;
     ErrorCorrectionLevel level = ErrorCorrectionLevel.L;
     boolean animate_live = false, display_stats = true;
+    boolean from_stdin = false;
     
     @SuppressWarnings("unchecked")
     List<String> remaining_args = c_line.getArgList();
@@ -518,6 +532,10 @@ public class BtQrReader
     if (c_line.hasOption("size"))
     {
       image_size = Integer.parseInt(c_line.getOptionValue("size"));
+    }
+    if (c_line.hasOption("stdin"))
+    {
+      from_stdin = true;
     }
     if (c_line.hasOption("framesize"))
     {
@@ -530,6 +548,10 @@ public class BtQrReader
     if (c_line.hasOption("output"))
     {
       output_filename = c_line.getOptionValue("output");
+    }
+    if (c_line.hasOption("pipe"))
+    {
+      pipe_filename = c_line.getOptionValue("pipe");
     }
     if (c_line.hasOption("window"))
     {
@@ -586,20 +608,27 @@ public class BtQrReader
     
     BtQrSender animator = new BtQrSender(frame_size, display_stats, image_size, 100/fps, format, level);
     String trace_filename = "";
-    if (remaining_args.size() < 2)
+    if (remaining_args.size() < 2 && !from_stdin && pipe_filename.isEmpty())
     {
-      System.err.println("Trace filename must be provided");
+      System.err.println("Trace filename must be provided, or options --stdin or --pipe");
       System.exit(ERR_ARGUMENTS);
     }
-    if (remaining_args.size() > 2)
+    // If we read from stdin or a pipe, all filenames are schemas
+    // If we read from a file, the first filename contains the trace
+    int start_index = 2;
+    if (from_stdin || !pipe_filename.isEmpty())
+    {
+      start_index = 1;
+    }
+    if (remaining_args.size() > start_index)
     {
       // All remaining arguments are schema files
-      for (int i = 2; i < remaining_args.size(); i++)
+      for (int i = start_index; i < remaining_args.size(); i++)
       {
         String schema_filename = remaining_args.get(i);
         try
         {
-          animator.setSchema(i - 2, new File(schema_filename));
+          animator.setSchema(i - start_index, new File(schema_filename));
         } catch (IOException e)
         {
           // TODO Auto-generated catch block
@@ -611,8 +640,28 @@ public class BtQrReader
         }
       }
     }
-    trace_filename = remaining_args.get(1);
-    animator.readMessages(new File(trace_filename));
+    if (from_stdin)
+    {
+      animator.readMessages(System.in, false);
+    }
+    else if (!pipe_filename.isEmpty())
+    {
+      try
+      {
+        animator.readMessages(new FileInputStream(pipe_filename), false);
+      }
+      catch (FileNotFoundException e)
+      {
+        System.err.println("Error: pipe " + pipe_filename + " not found");
+        System.exit(ERR_IO);
+      }
+    }
+    else
+    {
+      // Read messages from a file
+      trace_filename = remaining_args.get(1);
+      animator.readMessages(new File(trace_filename));
+    }
     if (output_filename.isEmpty())
     {
       if (animate_live)

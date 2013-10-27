@@ -18,10 +18,12 @@
 package ca.uqac.lif.qr;
 
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 
 import javax.imageio.ImageIO;
@@ -33,6 +35,9 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import ca.uqac.info.buffertannen.message.*;
 import ca.uqac.info.buffertannen.protocol.*;
 import ca.uqac.info.util.FileReadWrite;
+import ca.uqac.info.util.PipeCallback;
+import ca.uqac.info.util.PipeReader;
+import ca.uqac.info.util.TokenBuffer;
 
 public class BtQrSender
 {
@@ -214,33 +219,79 @@ public class BtQrSender
     }
   }
   
+  /**
+   * Instructs the sender to fetch its messages from some input stream
+   * @param in The input stream to read from (can also be {@link System.in}
+   */
+  protected void readMessages(InputStream in, boolean is_file)
+  {
+    PipeReader pr = new PipeReader(new BufferedInputStream(in), new QrCallback(), is_file);
+    pr.setSeparator("", "---");
+    if (!is_file)
+    {
+      // When the stream is momentarily empty, take the opportunity to broadcast schema segments
+      m_sender.setEmptyBufferIsEof(false);
+    }
+    Thread th = new Thread(pr);
+    th.start();
+  }
+  
+  /**
+   * Simple callback that is called whenever the pipe reader has
+   * processed a full message.
+   * @author sylvain
+   *
+   */
+  protected class QrCallback implements PipeCallback<String>
+  { 
+    @Override
+    public void notify(String token, long buffer_size)
+        throws ca.uqac.info.util.PipeCallback.CallbackException
+    {
+      BtQrSender.this.readMessage(token);
+    }
+  }
+  
+  /**
+   * Read messages from a file
+   * @param file_contents
+   */
   protected void readMessages(String file_contents)
   {
     String[] parts = file_contents.split("\n---\n");
     for (String part : parts)
     {
-      part = part.trim();
-      int first_space = part.indexOf(" ");
-      if (first_space < 0)
-        continue;
-      String left = part.substring(0, first_space);
-      part = part.substring(first_space + 1);
-      int schema_number = Integer.parseInt(left);
-      try
-      {
-        m_sender.addMessage(schema_number, part);
-      } catch (ReadException e)
-      {
-        // Ignore if cannot read
-        System.err.println("Could not add message");
-        continue;
-      }
-      catch (UnknownSchemaException e)
-      {
-        System.err.println("Unknown schema");
-        continue;
-      }
+      readMessage(part);
     }
+  }
+  
+  /**
+   * Processes a single message
+   * @param part
+   */
+  protected void readMessage(String part)
+  {
+    part = part.trim();
+    int first_space = part.indexOf(" ");
+    if (first_space < 0)
+      return;
+    String left = part.substring(0, first_space);
+    part = part.substring(first_space + 1);
+    int schema_number = Integer.parseInt(left);
+    try
+    {
+      m_sender.addMessage(schema_number, part);
+    } catch (ReadException e)
+    {
+      // Ignore if cannot read
+      System.err.println("Could not add message");
+      return;
+    }
+    catch (UnknownSchemaException e)
+    {
+      System.err.println("Unknown schema");
+      return;
+    }    
   }
   
   protected void printWriteStatistics(PrintStream out, int frame_delay)
@@ -248,13 +299,14 @@ public class BtQrSender
     int raw_bits = m_sender.getNumberOfRawBits();
     int total_frames = m_sender.getNumberOfFrames();
     int total_size = m_sender.getNumberOfDeltaSegmentsBits() + m_sender.getNumberOfMessageSegmentsBits();
+    // In the following, we use Math.max to avoid divisions by zero when no segment is sent yet
     //out.printf("Written to %s                  \n", output_filename);
     out.println("----------------------------------------------------");
     out.printf(" Frames sent:           %03d (%02.1f sec.)\n", total_frames, (float) total_frames * (float) frame_delay / 100f);
     out.println(" Messages sent:         " + (m_sender.getNumberOfMessageSegments() + m_sender.getNumberOfDeltaSegments()) + " (" + total_size + " bits)     ");
-    out.println("   Message segments:    " + m_sender.getNumberOfMessageSegments() + " (" + m_sender.getNumberOfMessageSegmentsBits() + " bits, " + m_sender.getNumberOfMessageSegmentsBits() / m_sender.getNumberOfMessageSegments() + " bits/seg.)     ");
-    out.println("   Delta segments:      " + m_sender.getNumberOfDeltaSegments() + " (" + m_sender.getNumberOfDeltaSegmentsBits() + " bits, " + m_sender.getNumberOfDeltaSegmentsBits() / m_sender.getNumberOfDeltaSegments() + " bits/seg.)     ");
-    out.println("   Schema segments:     " + m_sender.getNumberOfSchemaSegments() + " (" + m_sender.getNumberOfSchemaSegmentsBits() + " bits, " + m_sender.getNumberOfSchemaSegmentsBits() / m_sender.getNumberOfSchemaSegments() + " bits/seg.)     ");
+    out.println("   Message segments:    " + m_sender.getNumberOfMessageSegments() + " (" + m_sender.getNumberOfMessageSegmentsBits() + " bits, " + m_sender.getNumberOfMessageSegmentsBits() / Math.max(1, m_sender.getNumberOfMessageSegments()) + " bits/seg.)     ");
+    out.println("   Delta segments:      " + m_sender.getNumberOfDeltaSegments() + " (" + m_sender.getNumberOfDeltaSegmentsBits() + " bits, " + m_sender.getNumberOfDeltaSegmentsBits() / Math.max(1, m_sender.getNumberOfDeltaSegments()) + " bits/seg.)     ");
+    out.println("   Schema segments:     " + m_sender.getNumberOfSchemaSegments() + " (" + m_sender.getNumberOfSchemaSegmentsBits() + " bits, " + m_sender.getNumberOfSchemaSegmentsBits() / Math.max(1, m_sender.getNumberOfSchemaSegments()) + " bits/seg.)     ");
     out.println(" Bandwidth:");
     out.println("   Raw (with retrans.): "+ raw_bits + " bits (" + (raw_bits * frame_delay * total_frames) / 100 + " bits/sec.)     ");
     out.println("   Actual:              " + total_size + " bits (" + (total_size * frame_delay * total_frames) / 100 + " bits/sec.)     ");
