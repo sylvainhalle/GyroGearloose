@@ -302,7 +302,8 @@ public class BtQrSender
     // In the following, we use Math.max to avoid divisions by zero when no segment is sent yet
     //out.printf("Written to %s                  \n", output_filename);
     out.println("----------------------------------------------------");
-    out.printf(" Frames sent:           %03d (%02.1f sec.)\n", total_frames, (float) total_frames * (float) frame_delay / 100f);
+    out.printf(" Frames sent:           %03d (%02.1f sec.)      \n", total_frames, (float) total_frames * (float) frame_delay / 100f);
+    out.printf(" Buffer state:          %03d bits (%d segments)      \n", m_sender.getBufferSizeBits(), m_sender.getBufferSizeSegments());
     out.println(" Messages sent:         " + (m_sender.getNumberOfMessageSegments() + m_sender.getNumberOfDeltaSegments()) + " (" + total_size + " bits)     ");
     out.println("   Message segments:    " + m_sender.getNumberOfMessageSegments() + " (" + m_sender.getNumberOfMessageSegmentsBits() + " bits, " + m_sender.getNumberOfMessageSegmentsBits() / Math.max(1, m_sender.getNumberOfMessageSegments()) + " bits/seg.)     ");
     out.println("   Delta segments:      " + m_sender.getNumberOfDeltaSegments() + " (" + m_sender.getNumberOfDeltaSegmentsBits() + " bits, " + m_sender.getNumberOfDeltaSegmentsBits() / Math.max(1, m_sender.getNumberOfDeltaSegments()) + " bits/seg.)     ");
