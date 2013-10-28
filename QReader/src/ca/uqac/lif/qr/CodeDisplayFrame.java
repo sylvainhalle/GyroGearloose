@@ -52,19 +52,9 @@ public class CodeDisplayFrame extends JFrame
   protected ImagePanel m_imagePanel;
   
   /**
-   * A timer used to call the reader periodically
+   * The thread responsible for updating the window
    */
-  protected ToggleTimer m_timer;
-  
-  /**
-   * Whether the timer is currently running
-   */
-  protected boolean m_timerIsRunning = false;
-  
-  /**
-   * The instance of BtQrSender to poll periodically for new frames
-   */
-  protected BtQrSender m_sender;
+  protected WindowUpdater m_updater;
   
   /**
    * The window's title
@@ -72,57 +62,23 @@ public class CodeDisplayFrame extends JFrame
   protected static final String TITLE = "Code display";
   
   /**
-   * The delay used for the timer that polls the frame reader
-   */
-  protected int m_frameDelay = 13;
-  
-  /**
    * The cumulative number of frames displayed by the window
    */
   protected int m_frameCount = 0;
   
-  public CodeDisplayFrame(int frame_delay, BtQrSender sender)
+  public CodeDisplayFrame(WindowUpdater wu)
   {
     super(TITLE + " (0)");
     super.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     m_imagePanel = new ImagePanel();
     m_imagePanel.setPreferredSize(new Dimension(300, 300));
-    m_frameDelay = frame_delay;
-    m_sender = sender;
     KeyListener kl = new KeyTrap();
     m_imagePanel.addKeyListener(kl);
     super.getContentPane().add(m_imagePanel, BorderLayout.CENTER);
     super.addKeyListener(kl);
     super.setLocationRelativeTo(null); 
     super.pack();
-    
-    // Setup timer
-    m_timer = new ToggleTimer(new PollTaskFactory(), m_frameDelay * 10);
-  }
-  
-  protected class PollTaskFactory implements ToggleTimer.TimerTaskFactory
-  {
-
-    @Override
-    public TimerTask getTask()
-    {
-      return new PollTask();
-    }
-  }
-  
-  protected class PollTask extends java.util.TimerTask
-  {
-    @Override
-    public void run()
-    {
-      BufferedImage bi = CodeDisplayFrame.this.m_sender.pollNextImage();
-      if (bi != null)
-      {
-        m_frameCount++;
-        CodeDisplayFrame.this.setTitle(TITLE + " (" + m_frameCount + ")");
-        CodeDisplayFrame.this.setImage(bi);
-      }
-    }
+    m_updater = wu;
   }
   
   public void setImage(BufferedImage img)
@@ -131,7 +87,6 @@ public class CodeDisplayFrame extends JFrame
     super.repaint();
   }
   
-
   /**
    * Simple panel used to display an image
    * @author sylvain
@@ -185,8 +140,8 @@ public class CodeDisplayFrame extends JFrame
       {
       case 's':
       case 'S':
-        // Start/stop the timer
-        m_timer.toggle();
+        // Start/stop the automatic refresh
+        m_updater.toggle();
         break;
       case 'q':
       case 'Q':
@@ -195,11 +150,7 @@ public class CodeDisplayFrame extends JFrame
         System.exit(0);
         break;
       case ' ':
-        // Poll for next frame
-        if (!m_timer.isRunning())
-        {
-          new PollTask().run();
-        }
+        m_updater.actionLoop();
         break;
       default:
         // Do nothing

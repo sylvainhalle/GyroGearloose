@@ -671,9 +671,11 @@ public class BtQrReader
     {
       // Either we asked explicitly for live animation, or we use
       // a pipe (which implies it)
-      CodeDisplayFrame m_window = new CodeDisplayFrame(100/fps, animator);
+      WindowUpdater wu = new WindowUpdater(animator, 1000/fps);
+      CodeDisplayFrame m_window = new CodeDisplayFrame(wu);
+      wu.setWindow(m_window);
       m_window.setVisible(true);
-      Thread th = new Thread(new WindowUpdater(animator, m_window, 100/fps));
+      Thread th = new Thread(wu);
       th.start();
       while (th.isAlive())
       {

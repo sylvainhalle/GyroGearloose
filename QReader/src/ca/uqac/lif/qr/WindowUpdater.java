@@ -30,12 +30,16 @@ public class WindowUpdater extends StoppableRunnable
   
   protected CodeDisplayFrame m_window;
   
-  public WindowUpdater(BtQrSender sender, CodeDisplayFrame window, int interval)
+  public WindowUpdater(BtQrSender sender, int interval)
   {
     super();
     m_sender = sender;
-    m_window = window;
     m_refreshInterval = interval;
+  }
+  
+  public void setWindow(CodeDisplayFrame w)
+  {
+    m_window = w;
   }
 
   @Override

@@ -61,7 +61,9 @@ public abstract class StoppableRunnable implements Runnable
   @Override
   public final void run()
   {
+    // Start in the active, but suspended state
     m_active = true;
+    m_suspended = true;
     while (m_active)
     {
       // If thread is suspended, wait until someone starts it again
