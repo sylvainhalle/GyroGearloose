@@ -39,7 +39,7 @@ public class WindowUpdater extends StoppableRunnable
   }
 
   @Override
-  public boolean actionLoop()
+  public LoopStatus actionLoop()
   {
     // Poll sender for a new image
     BufferedImage img = m_sender.pollNextImage();
@@ -59,7 +59,8 @@ public class WindowUpdater extends StoppableRunnable
       // TODO Auto-generated catch block
       e.printStackTrace();
     }
-    return true;
+    // We want to be called again
+    return LoopStatus.ACTIVE;
   }
 
 }

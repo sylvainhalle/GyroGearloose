@@ -640,15 +640,19 @@ public class BtQrReader
         }
       }
     }
+    // --- Setup message source ---
     if (from_stdin)
     {
+      // Input message source is stdin
       animator.readMessages(System.in, false);
     }
     else if (!pipe_filename.isEmpty())
     {
+      // Input message source is a named pipe
       try
       {
         animator.readMessages(new FileInputStream(pipe_filename), false);
+        
       }
       catch (FileNotFoundException e)
       {
@@ -658,30 +662,34 @@ public class BtQrReader
     }
     else
     {
-      // Read messages from a file
+      // Input message source is a file
       trace_filename = remaining_args.get(1);
       animator.readMessages(new File(trace_filename));
     }
-    if (output_filename.isEmpty())
+    // --- Setup output ---
+    if (animate_live || !pipe_filename.isEmpty())
     {
-      if (animate_live)
+      // Either we asked explicitly for live animation, or we use
+      // a pipe (which implies it)
+      CodeDisplayFrame m_window = new CodeDisplayFrame(100/fps, animator);
+      m_window.setVisible(true);
+      Thread th = new Thread(new WindowUpdater(animator, m_window, 100/fps));
+      th.start();
+      while (th.isAlive())
       {
-        // Animate directly in a window
-        CodeDisplayFrame m_window = new CodeDisplayFrame(100/fps, animator);
-        m_window.setVisible(true);
-        while (m_window.isVisible())
+        try
         {
-          try
-          {
-            Thread.sleep(1000);
-          } catch (InterruptedException e)
-          {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-          }
+          Thread.sleep(1000);
+        } catch (InterruptedException e)
+        {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
         }
       }
-      else
+    }
+    else
+    {
+      if (output_filename.isEmpty())
       {
         // Output image to stdout
         byte[] image = animator.animate(100/fps, image_size, format, level);
@@ -693,17 +701,14 @@ public class BtQrReader
         {
           System.err.println("ERROR writing image to stdout");
           System.exit(ERR_IO);
-        }        
+        }
+      }
+      else
+      {
+        // Output image to file
+        animator.animate(output_filename, 100/fps, image_size, format, level);
       }
     }
-    else
-    {
-      // Output image to file
-      animator.animate(output_filename, 100/fps, image_size, format, level);
-    }
-    
-    // Print statistics
-    //printWriteStatistics(System.err, animator, fps);
     System.exit(ERR_OK);
   }
   
