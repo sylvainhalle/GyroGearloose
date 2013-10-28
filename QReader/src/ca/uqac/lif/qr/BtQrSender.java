@@ -37,7 +37,6 @@ import ca.uqac.info.buffertannen.protocol.*;
 import ca.uqac.info.util.FileReadWrite;
 import ca.uqac.info.util.PipeCallback;
 import ca.uqac.info.util.PipeReader;
-import ca.uqac.info.util.TokenBuffer;
 
 public class BtQrSender
 {
