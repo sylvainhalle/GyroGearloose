@@ -37,6 +37,7 @@ import ca.uqac.info.buffertannen.protocol.*;
 import ca.uqac.info.util.FileReadWrite;
 import ca.uqac.info.util.PipeCallback;
 import ca.uqac.info.util.PipeReader;
+import ca.uqac.lif.media.GifAnimator;
 
 public class BtQrSender
 {

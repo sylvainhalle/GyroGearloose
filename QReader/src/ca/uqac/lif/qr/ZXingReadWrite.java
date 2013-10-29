@@ -205,10 +205,9 @@ public class ZXingReadWrite extends CodeReaderWriter
    * @throws ReaderException Indicates that no code could be
    *   read from the input image
    */
-  @Override
-  public String readCode(InputStream in) throws IOException, ReaderException
+  public String readCode(BufferedImage bi) throws IOException, ReaderException
   { 
-    GlobalHistogramBinarizer bin = new GlobalHistogramBinarizer(new BufferedImageLuminanceSource(ImageIO.read(in)));
+    GlobalHistogramBinarizer bin = new GlobalHistogramBinarizer(new BufferedImageLuminanceSource(bi));
     BinaryBitmap binaryBitmap = new BinaryBitmap(bin);
     
     if (DEBUG_MODE)
@@ -219,6 +218,13 @@ public class ZXingReadWrite extends CodeReaderWriter
     Map<DecodeHintType, Object> hints = setupHints();
     Result result = s_reader.decode(binaryBitmap, hints);
     return result.getText();  
+  }
+  
+  @Override
+  public String readCode(InputStream in) throws IOException, ReaderException
+  {
+    BufferedImage bi = ImageIO.read(in);
+    return readCode(bi);
   }
   
   protected Map<DecodeHintType, Object> setupHints()

@@ -18,11 +18,13 @@
 
 package ca.uqac.lif.qr;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.cli.*;
@@ -32,6 +34,8 @@ import ca.uqac.info.buffertannen.message.BitSequence;
 import ca.uqac.info.buffertannen.message.ReadException;
 import ca.uqac.info.buffertannen.message.SchemaElement;
 import ca.uqac.info.buffertannen.protocol.Receiver;
+import ca.uqac.lif.media.FilenameListIterator;
+import ca.uqac.lif.media.VideoFrameIterator;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.ReaderException;
@@ -59,7 +63,7 @@ public class BtQrReader
     CommandLine c_line = setupCommandLine(args, options);
     assert c_line != null;
     int verbosity = 0;
-    
+
     if (verbosity > 0)
     {
       showHeader();
@@ -72,7 +76,7 @@ public class BtQrReader
       System.err.println("under certain conditions. See the file COPYING for details.\n");
       System.exit(ERR_OK);
     }
-    
+
     // Get action
     @SuppressWarnings("unchecked")
     List<String> remaining_args = c_line.getArgList();
@@ -271,7 +275,7 @@ public class BtQrReader
     }
     return c_line;
   }
-  
+
   protected static void read(CommandLine c_line)
   {
     int lost_frames = 0, total_frames = 0;
@@ -285,7 +289,7 @@ public class BtQrReader
     boolean realtime_display = true;
     @SuppressWarnings("unchecked")
     List<String> remaining_args = c_line.getArgList();
-    
+
     if (c_line.hasOption("verbosity"))
     {
       verbosity = Integer.parseInt(c_line.getOptionValue("verbosity"));
@@ -323,7 +327,7 @@ public class BtQrReader
     {
       realtime_display = false;
     }
-    
+
     // Instantiate BufferTannen receiver
     Receiver recv = new Receiver();
     recv.setVerbosity(verbosity);
@@ -359,9 +363,28 @@ public class BtQrReader
     {
       reader_writer.setPureCode(true);
     }
-    long start_time = System.nanoTime();
-    for (String filename : remaining_args)
+    Iterator<BufferedImage> image_source = null;
+    // Check extension of first filename
+    String first_filename = remaining_args.get(0);
+    if (isVideoFile(first_filename))
     {
+      // File is a video: iterate over its frames
+      image_source = new VideoFrameIterator(first_filename);
+    }
+    else
+    {
+      // File is an image: iterate over each filename passed as argument
+      image_source = new FilenameListIterator(remaining_args);
+    }
+    long start_time = System.nanoTime();
+    while (image_source.hasNext())
+    {
+      BufferedImage img = image_source.next();
+      if (img == null)
+      {
+        // Another way of checking if frames remain
+        break;
+      }
       total_frames++;
       long current_time = System.nanoTime();
       if (realtime_display && (last_refresh < 0 || current_time - last_refresh > 500000000)) // Refresh display every second or so
@@ -379,17 +402,11 @@ public class BtQrReader
         }
         printReadStatistics(System.err, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
       }
-      File image_to_read = new File(filename);
       String data = null;
       try
       {
         // First try to read code with last good threshold value
-        data = reader_writer.readCode(new FileInputStream(new File(filename)), last_good_threshold);
-      }
-      catch (IOException e)
-      {
-        // File not found
-        continue;
+        data = reader_writer.readCode(img, last_good_threshold);
       }
       catch (ReaderException e)
       {
@@ -397,7 +414,7 @@ public class BtQrReader
         if (guess_threshold)
         {
           ThresholdGuesser guess = new ThresholdGuesser();
-          guess.addImage(image_to_read);
+          guess.addImage(img);
           int suggested_threshold = guess.guessThreshold(60, 220, 10, last_good_threshold);
           if (suggested_threshold > 0)
           {
@@ -407,13 +424,9 @@ public class BtQrReader
             System.err.println("Re-estimating threshold at " + last_good_threshold);
           try
           {
-            data = reader_writer.readCode(new FileInputStream(new File(filename)), binarization_threshold);
+            data = reader_writer.readCode(img, binarization_threshold);
           }
-          catch (IOException e1)
-          {
-            // TODO Auto-generated catch block
-            e1.printStackTrace();
-          } catch (ReaderException e1)
+          catch (ReaderException e1)
           {
             // Still cannot read code: too bad
           }
@@ -487,7 +500,7 @@ public class BtQrReader
     printReadStatistics(System.err, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
     System.exit(ERR_OK);    
   }
-  
+
   protected static void printReadStatistics(PrintStream out, Receiver recv, int total_frames, int total_size, int lost_frames, int total_messages, long start_time, int fps, int num_files)
   {
     long end_time = System.nanoTime();
@@ -516,7 +529,7 @@ public class BtQrReader
     out.println("   Effective:        " + total_size + " bits (" + total_size * fps / total_frames + " bits/sec.)     ");
     out.println("----------------------------------------------------\n");    
   }
-  
+
   protected static void animate(CommandLine c_line)
   {
     int image_size = 300, frame_size = 2000, fps = 8;
@@ -525,10 +538,10 @@ public class BtQrReader
     ErrorCorrectionLevel level = ErrorCorrectionLevel.L;
     boolean animate_live = false, display_stats = true;
     boolean from_stdin = false;
-    
+
     @SuppressWarnings("unchecked")
     List<String> remaining_args = c_line.getArgList();
-    
+
     if (c_line.hasOption("size"))
     {
       image_size = Integer.parseInt(c_line.getOptionValue("size"));
@@ -605,7 +618,7 @@ public class BtQrReader
         System.err.println("Invalid barcode format");
       }
     }
-    
+
     BtQrSender animator = new BtQrSender(frame_size, display_stats, image_size, 100/fps, format, level);
     String trace_filename = "";
     if (remaining_args.size() < 2 && !from_stdin && pipe_filename.isEmpty())
@@ -652,7 +665,7 @@ public class BtQrReader
       try
       {
         animator.readMessages(new FileInputStream(pipe_filename), false);
-        
+
       }
       catch (FileNotFoundException e)
       {
@@ -713,7 +726,7 @@ public class BtQrReader
     }
     System.exit(ERR_OK);
   }
-  
+
   protected static void decode(CommandLine c_line)
   {
     @SuppressWarnings("unchecked")
@@ -775,6 +788,35 @@ public class BtQrReader
   public static void showHeader()
   {
     System.err.println("QRTranslator");
-  }  
+  }
 
+  public static String getFileExtension(String filename)
+  {
+    if (filename == null) {
+      return null;
+    }
+    int lastUnixPos = filename.lastIndexOf('/');
+    int lastWindowsPos = filename.lastIndexOf('\\');
+    int indexOfLastSeparator = Math.max(lastUnixPos, lastWindowsPos);
+    int extensionPos = filename.lastIndexOf('.');
+    int lastSeparator = indexOfLastSeparator;
+    int indexOfExtension = lastSeparator > extensionPos ? -1 : extensionPos;
+    int index = indexOfExtension;
+    if (index == -1) {
+      return "";
+    } else {
+      return filename.substring(index + 1);
+    }
+  }
+  
+  /**
+   * Checks if a given file is a video, by looking at its extension
+   * @param filename The filename
+   * @return true if file is deemed to be a video
+   */
+  protected static boolean isVideoFile(String filename)
+  {
+    String extension = getFileExtension(filename);
+    return extension.compareToIgnoreCase("mp4") == 0 || extension.compareToIgnoreCase("avi") == 0 || extension.compareToIgnoreCase("mkv") == 0;
+  }
 }
