@@ -25,6 +25,7 @@ import java.io.FileNotFoundException;
 import java.io.PrintStream;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.commons.cli.*;
@@ -36,11 +37,11 @@ import ca.uqac.info.buffertannen.message.SchemaElement;
 import ca.uqac.info.buffertannen.protocol.Receiver;
 import ca.uqac.lif.media.FilenameListIterator;
 import ca.uqac.lif.media.VideoFrameIterator;
+import ca.uqac.lif.media.VideoFrameReader;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.ReaderException;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
-import com.sun.org.apache.xml.internal.security.exceptions.Base64DecodingException;
 
 public class BtQrReader
 {
@@ -229,6 +230,12 @@ public class BtQrReader
             .create();
     options.addOption(opt);
     opt = OptionBuilder
+        .withLongOpt("noprocess")
+        .withDescription(
+            "Only attempt to decode codes, don't process their contents")
+            .create();
+    options.addOption(opt);
+    opt = OptionBuilder
         .withLongOpt("pipe")
         .withArgName("file")
         .hasArg()
@@ -284,7 +291,7 @@ public class BtQrReader
     int binarization_threshold = 128;
     int verbosity = 0;
     int fps = 8;
-    boolean first_file = true;
+    boolean first_file = true, dont_process = false;
     boolean guess_threshold = false, mute = false;
     boolean realtime_display = true;
     @SuppressWarnings("unchecked")
@@ -293,6 +300,10 @@ public class BtQrReader
     if (c_line.hasOption("verbosity"))
     {
       verbosity = Integer.parseInt(c_line.getOptionValue("verbosity"));
+    }
+    if (c_line.hasOption("noprocess"))
+    {
+      dont_process = true;
     }
     if (c_line.hasOption("framerate"))
     {
@@ -334,7 +345,7 @@ public class BtQrReader
     recv.setConsole(System.err);
 
     long last_refresh = -1;
-    int num_files = remaining_args.size();
+    int num_files = 1;
     int last_good_threshold = binarization_threshold;
     BarcodeFormat format = BarcodeFormat.QR_CODE;
     ZXingReadWrite reader_writer = new ZXingReadWrite();
@@ -365,16 +376,22 @@ public class BtQrReader
     }
     Iterator<BufferedImage> image_source = null;
     // Check extension of first filename
-    String first_filename = remaining_args.get(0);
+    LinkedList<String> filenames = new LinkedList<String>();
+    filenames.addAll(remaining_args);
+    filenames.removeFirst(); // Since arg 0 is "read"
+    String first_filename = filenames.peek(); 
     if (isVideoFile(first_filename))
     {
       // File is a video: iterate over its frames
-      image_source = new VideoFrameIterator(first_filename);
+      VideoFrameReader vfr = new VideoFrameReader(first_filename);
+      image_source = new VideoFrameIterator(vfr);
+      num_files = vfr.getNumFrames(fps);
     }
     else
     {
       // File is an image: iterate over each filename passed as argument
-      image_source = new FilenameListIterator(remaining_args);
+      image_source = new FilenameListIterator(filenames);
+      num_files = filenames.size();
     }
     long start_time = System.nanoTime();
     while (image_source.hasNext())
@@ -394,13 +411,16 @@ public class BtQrReader
         {
           // Move cursor up 14 lines (this is the number of lines written by
           // {@link #printReadStatistics}
-          System.err.print("\u001B[14A\r");
+          if (dont_process)
+            System.err.print("\u001B[5A\r");
+          else
+            System.err.print("\u001B[14A\r");
         }
         else
         {
           first_file = false;
         }
-        printReadStatistics(System.err, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
+        printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
       }
       String data = null;
       try
@@ -450,58 +470,59 @@ public class BtQrReader
         lost_frames++;
         continue;
       }
-      catch (Base64DecodingException e)
-      {
-        lost_frames++;
-        continue;        
-      }
       //System.err.printf("%4d/%4d (%2d%%)     \r", total_frames, num_files, (total_frames - lost_frames) * 100 / total_frames);
-      recv.putBitSequence(bs);
-      SchemaElement se = recv.pollMessage();
-      int lost_now = recv.getMessageLostCount();
-      while (se != null)
+      if (!dont_process)
       {
-        if (verbosity >= 3)
-          System.err.println("Lost : " + lost_now);
-        total_messages++;
-        BitSequence t_bs = null;
-        try
+        recv.putBitSequence(bs);
+        SchemaElement se = recv.pollMessage();
+        int lost_now = recv.getMessageLostCount();
+        while (se != null)
         {
-          t_bs = se.toBitSequence();
-        }
-        catch (BitFormatException e)
-        {
-          // Do nothing
-        }
-        total_size += t_bs.size();
-        for (int i = 0; i < lost_now - lost_segments; i++)
-        {
+          if (verbosity >= 3)
+            System.err.println("Lost : " + lost_now);
+          total_messages++;
+          BitSequence t_bs = null;
+          try
+          {
+            t_bs = se.toBitSequence();
+          }
+          catch (BitFormatException e)
+          {
+            // Do nothing
+          }
+          total_size += t_bs.size();
+          for (int i = 0; i < lost_now - lost_segments; i++)
+          {
+            if (!mute)
+              System.out.println("This message was lost");
+            if (verbosity >= 2)
+              System.err.println("Lost message " + total_messages);
+          }
+          lost_segments = lost_now;
           if (!mute)
-            System.out.println("This message was lost");
-          if (verbosity >= 2)
-            System.err.println("Lost message " + total_messages);
-        }
-        lost_segments = lost_now;
-        if (!mute)
-          System.out.println(se.toString());
-        se = recv.pollMessage();
-        lost_now = recv.getMessageLostCount();
+            System.out.println(se.toString());
+          se = recv.pollMessage();
+          lost_now = recv.getMessageLostCount();
+        }        
       }
     }
     if (!first_file && realtime_display)
     {
-      // Move cursor up 14 lines
-      System.err.print("\u001B[14A\r");
+      // Move cursor up
+      if (dont_process)
+        System.err.print("\u001B[5A\r");
+      else
+        System.err.print("\u001B[14A\r");
     }
     else
     {
       first_file = false;
     }
-    printReadStatistics(System.err, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
+    printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
     System.exit(ERR_OK);    
   }
 
-  protected static void printReadStatistics(PrintStream out, Receiver recv, int total_frames, int total_size, int lost_frames, int total_messages, long start_time, int fps, int num_files)
+  protected static void printReadStatistics(PrintStream out, boolean dont_process, Receiver recv, int total_frames, int total_size, int lost_frames, int total_messages, long start_time, int fps, int num_files)
   {
     long end_time = System.nanoTime();
     int raw_bits = recv.getNumberOfRawBits();
@@ -509,24 +530,27 @@ public class BtQrReader
     //out.println("Processing results               ");
     out.println("----------------------------------------------------");
     out.printf(" Progress:           %04d/%04d (%02.1f sec. @%d fps)     \n", total_frames, num_files, (float) total_frames / (float) fps, fps);
-    out.println(" Link quality:       " + (total_frames - lost_frames) + "/" + total_frames + " (" + ((total_frames - lost_frames) * 100 / total_frames) + "%)     ");
-    out.print(" Messages received:  " + total_messages + "/" + (total_messages + recv.getMessageLostCount()));
-    if (total_messages + recv.getMessageLostCount() > 0)
-      out.println(" (" + (total_messages * 100 / (total_messages + recv.getMessageLostCount())) + "%)     ");
-    else
-      out.println("     ");
-    out.println("   Message segments: " + recv.getNumberOfMessageSegments() + " (" + recv.getNumberOfMessageSegmentsBits() + " bits)     ");
-    out.println("   Delta segments:   " + recv.getNumberOfDeltaSegments() + " (" + recv.getNumberOfDeltaSegmentsBits() + " bits)     ");
-    out.println("   Schema segments:  " + recv.getNumberOfSchemaSegments() + " (" + recv.getNumberOfSchemaSegmentsBits() + " bits)     ");
-    out.print(" Processing rate:    " + processing_time_ms / total_frames + " ms/frame ");
-    if (processing_time_ms > 0)
-      out.println("(" + (total_frames * 1000 / processing_time_ms) + " fps)     ");
-    else
-      out.println("     ");
-    out.println(" Bandwidth:");
-    out.println("   Raw:              " + raw_bits + " bits (" + raw_bits * fps / total_frames + " bits/sec.)     ");
-    out.println("   Actual:           " + recv.getNumberOfDistinctBits() + " bits (" + recv.getNumberOfDistinctBits() * fps / total_frames + " bits/sec.)     ");
-    out.println("   Effective:        " + total_size + " bits (" + total_size * fps / total_frames + " bits/sec.)     ");
+    out.println(" Link quality:       " + (total_frames - lost_frames) + "/" + total_frames + " (" + ((total_frames - lost_frames) * 100 / Math.max(1, total_frames)) + "%)     ");
+    if (!dont_process)
+    {
+      out.print(" Messages received:  " + total_messages + "/" + (total_messages + recv.getMessageLostCount()));
+      if (total_messages + recv.getMessageLostCount() > 0)
+        out.println(" (" + (total_messages * 100 / (total_messages + recv.getMessageLostCount())) + "%)     ");
+      else
+        out.println("     ");
+      out.println("   Message segments: " + recv.getNumberOfMessageSegments() + " (" + recv.getNumberOfMessageSegmentsBits() + " bits)     ");
+      out.println("   Delta segments:   " + recv.getNumberOfDeltaSegments() + " (" + recv.getNumberOfDeltaSegmentsBits() + " bits)     ");
+      out.println("   Schema segments:  " + recv.getNumberOfSchemaSegments() + " (" + recv.getNumberOfSchemaSegmentsBits() + " bits)     ");
+      out.print(" Processing rate:    " + processing_time_ms / Math.max(1, total_frames) + " ms/frame ");
+      if (processing_time_ms > 0)
+        out.println("(" + (total_frames * 1000 / processing_time_ms) + " fps)     ");
+      else
+        out.println("     ");
+      out.println(" Bandwidth:");
+      out.println("   Raw:              " + raw_bits + " bits (" + raw_bits * fps / Math.max(1, total_frames) + " bits/sec.)     ");
+      out.println("   Actual:           " + recv.getNumberOfDistinctBits() + " bits (" + recv.getNumberOfDistinctBits() * fps / Math.max(1, total_frames) + " bits/sec.)     ");
+      out.println("   Effective:        " + total_size + " bits (" + total_size * fps / Math.max(1, total_frames) + " bits/sec.)     ");
+    }
     out.println("----------------------------------------------------\n");    
   }
 

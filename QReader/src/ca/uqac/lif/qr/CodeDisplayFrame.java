@@ -18,6 +18,8 @@
 package ca.uqac.lif.qr;
 
 import java.awt.*;
+import java.awt.event.ComponentEvent;
+import java.awt.event.ComponentListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
@@ -72,7 +74,12 @@ public class CodeDisplayFrame extends JFrame
     m_imagePanel.setPreferredSize(new Dimension(300, 300));
     KeyListener kl = new KeyTrap();
     m_imagePanel.addKeyListener(kl);
-    super.getContentPane().add(m_imagePanel, BorderLayout.CENTER);
+    super.getContentPane().setBackground(Color.WHITE);
+    Box box = new Box(BoxLayout.Y_AXIS);
+    box.add(Box.createVerticalGlue());
+    box.add(m_imagePanel);
+    box.add(Box.createVerticalGlue());
+    super.getContentPane().add(box, BorderLayout.CENTER);
     super.addKeyListener(kl);
     super.setLocationRelativeTo(null); 
     super.pack();
@@ -102,9 +109,20 @@ public class CodeDisplayFrame extends JFrame
      */
     protected BufferedImage m_image;
     
+    public ImagePanel()
+    {
+      super();
+    }
+    
     public void setImage(BufferedImage img)
     {
       m_image = img;
+      int height = img.getHeight();
+      int width = img.getWidth();
+      Dimension dim = new Dimension(width, height);
+      super.setPreferredSize(dim);
+      super.setMaximumSize(dim);
+      super.setMinimumSize(dim);
     }
     
     @Override
@@ -117,18 +135,11 @@ public class CodeDisplayFrame extends JFrame
   
   protected class KeyTrap implements KeyListener
   {
+    @Override
+    public void keyPressed(KeyEvent arg0) {  }
 
     @Override
-    public void keyPressed(KeyEvent arg0)
-    {
-      // Do nothing
-    }
-
-    @Override
-    public void keyReleased(KeyEvent arg0)
-    {
-      // Do nothing
-    }
+    public void keyReleased(KeyEvent arg0) {  }
 
     @Override
     public void keyTyped(KeyEvent arg0)
@@ -155,5 +166,24 @@ public class CodeDisplayFrame extends JFrame
         break;
       }
     }
+  }
+  
+  protected class WindowEventTrap implements ComponentListener
+  {
+    @Override
+    public void componentHidden(ComponentEvent arg0) {  }
+
+    @Override
+    public void componentMoved(ComponentEvent arg0) {  }
+
+    @Override
+    public void componentResized(ComponentEvent arg0)
+    {
+      
+    }
+
+    @Override
+    public void componentShown(ComponentEvent arg0) {  }
+    
   }
 }

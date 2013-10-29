@@ -23,6 +23,7 @@ import com.xuggle.mediatool.IMediaReader;
 import com.xuggle.mediatool.MediaListenerAdapter;
 import com.xuggle.mediatool.ToolFactory;
 import com.xuggle.mediatool.event.IVideoPictureEvent;
+import com.xuggle.xuggler.IContainer;
 import com.xuggle.xuggler.IError;
 
 /**
@@ -57,6 +58,11 @@ public class VideoFrameReader extends MediaListenerAdapter
    */
   protected IMediaReader m_reader = null;
   
+  /**
+   * The duration of the movie (in ms)
+   */
+  protected long m_duration = 0;
+  
   public VideoFrameReader(String videoFile)
   {
     this(videoFile, BufferedImage.TYPE_3BYTE_BGR);
@@ -65,8 +71,14 @@ public class VideoFrameReader extends MediaListenerAdapter
   public VideoFrameReader(String videoFile, int image_type)
   {
     super();
+    IContainer container = IContainer.make();
+    int result = container.open(videoFile, IContainer.Type.READ, null);
+    if (result > 0)
+    {
+      m_duration = container.getDuration();
+    }
     // Create a media reader for processing video
-    m_reader = ToolFactory.makeReader(videoFile);
+    m_reader = ToolFactory.makeReader(container);
 
     // Stipulate that we want BufferedImages created in BGR 24bit color space
     m_reader.setBufferedImageTypeToGenerate(image_type);
@@ -76,6 +88,28 @@ public class VideoFrameReader extends MediaListenerAdapter
     // to the MediaReader. DecodeAndCaptureFrames implements
     // onVideoPicture().
     m_reader.addListener(this);
+  }
+  
+  /**
+   * Estimates the number of frames in the video, on the basis of
+   * 30 frames per second.
+   * @return The estimated number of frames in the video
+   */
+  public int getNumFrames()
+  {
+    return getNumFrames(30);
+  }
+  
+  /**
+   * Estimates the number of frames in the video, for a given framerate.
+   * The result is the video duration divided by the number of frames
+   * per second, rounded to the closest integer.
+   * @param fps The frames per second
+   * @return The estimated number of frames in the video
+   */
+  public int getNumFrames(int fps)
+  {
+    return (int)((m_duration * (long) fps) / 1000);
   }
 
   /**

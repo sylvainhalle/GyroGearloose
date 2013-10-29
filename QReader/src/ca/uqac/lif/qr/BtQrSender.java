@@ -127,8 +127,8 @@ public class BtQrSender
     {
       if (!m_firstFrame)
       {
-        // Move cursor up 11 lines
-        System.err.print("\u001B[11A\r");
+        // Move cursor up 12 lines
+        System.err.print("\u001B[12A\r");
       }
       else
       {

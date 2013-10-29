@@ -33,8 +33,14 @@ public class VideoFrameIterator implements Iterator<BufferedImage>
   
   public VideoFrameIterator(String video_filename)
   {
-    m_reader = new VideoFrameReader(video_filename);
+    this(new VideoFrameReader(video_filename));
+  }
+  
+  public VideoFrameIterator(VideoFrameReader reader)
+  {
+    super();
     m_isNotOver = true;
+    m_reader = reader;
   }
   
   @Override
