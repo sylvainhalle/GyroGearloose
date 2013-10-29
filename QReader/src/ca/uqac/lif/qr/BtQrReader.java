@@ -288,6 +288,7 @@ public class BtQrReader
     int lost_frames = 0, total_frames = 0;
     int lost_segments = 0;
     int total_messages = 0, total_size = 0;
+    int frame_size = 0;
     int binarization_threshold = 128;
     int verbosity = 0;
     int fps = 8;
@@ -300,6 +301,15 @@ public class BtQrReader
     if (c_line.hasOption("verbosity"))
     {
       verbosity = Integer.parseInt(c_line.getOptionValue("verbosity"));
+    }
+    if (c_line.hasOption("framesize"))
+    {
+      frame_size = Integer.parseInt(c_line.getOptionValue("framesize"));
+    }
+    else
+    {
+      System.err.println("ERROR: a maximum frame size must be specified in order to read");
+      System.exit(ERR_ARGUMENTS);
     }
     if (c_line.hasOption("noprocess"))
     {
@@ -341,6 +351,7 @@ public class BtQrReader
 
     // Instantiate BufferTannen receiver
     Receiver recv = new Receiver();
+    recv.setFrameMaxLength(frame_size);
     recv.setVerbosity(verbosity);
     recv.setConsole(System.err);
 
@@ -462,6 +473,7 @@ public class BtQrReader
       BitSequence bs = new BitSequence();
       try
       {
+        System.out.println("RECV:" + data);
         bs.fromBase64(data);
       } catch (BitFormatException e)
       {

@@ -109,7 +109,9 @@ public class BtQrSender
     try
     {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
-      m_readerWriter.writeCode(out, bs.toBase64(), m_imageSize, m_imageSize);
+      String base64_contents = bs.toBase64();
+      System.out.println("SENT: " + base64_contents);
+      m_readerWriter.writeCode(out, base64_contents, m_imageSize, m_imageSize);
       ByteArrayInputStream in = new ByteArrayInputStream(out.toByteArray());
       image_out = ImageIO.read(in);
     }
