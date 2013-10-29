@@ -21,11 +21,9 @@ import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
-import java.util.TimerTask;
 
 import javax.swing.*;
 
-import ca.uqac.info.util.ToggleTimer;
 
 /**
  * Window used to display codes on the screen. When the windows has the focus,
