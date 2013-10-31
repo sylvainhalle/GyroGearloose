@@ -473,7 +473,6 @@ public class BtQrReader
       BitSequence bs = new BitSequence();
       try
       {
-        System.out.println("RECV:" + data);
         bs.fromBase64(data);
       } catch (BitFormatException e)
       {

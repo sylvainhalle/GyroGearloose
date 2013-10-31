@@ -67,6 +67,11 @@ public class BtQrSender
   protected int m_imageSize = 300;
   
   /**
+   * The system time when the last frame was produced
+   */
+  protected long m_time_last_frame = 0;
+  
+  /**
    * The error correction level to use when producing codes
    */
   ErrorCorrectionLevel m_level = ErrorCorrectionLevel.L;
@@ -110,7 +115,6 @@ public class BtQrSender
     {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       String base64_contents = bs.toBase64();
-      System.out.println("SENT: " + base64_contents);
       m_readerWriter.writeCode(out, base64_contents, m_imageSize, m_imageSize);
       ByteArrayInputStream in = new ByteArrayInputStream(out.toByteArray());
       image_out = ImageIO.read(in);
@@ -129,14 +133,16 @@ public class BtQrSender
     {
       if (!m_firstFrame)
       {
-        // Move cursor up 12 lines
-        System.err.print("\u001B[12A\r");
+        // Move cursor up 13 lines
+        System.err.print("\u001B[13A\r");
       }
       else
       {
         m_firstFrame = false;
       }
-      printWriteStatistics(System.err, m_frameDelay);
+      long current_time = System.nanoTime();
+      printWriteStatistics(System.err, m_frameDelay, current_time - m_time_last_frame);
+      m_time_last_frame = current_time;
     }
     return image_out;
   }
@@ -161,8 +167,10 @@ public class BtQrSender
     reader_writer.setBarcodeFormat(format);
     reader_writer.setErrorCorrectionLevel(level);
     boolean first_file = true;
+    long current_time = 0;
     while (bs != null)
     {
+      current_time = System.nanoTime();
       try
       {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -182,18 +190,19 @@ public class BtQrSender
       {
         if (!first_file)
         {
-          // Move cursor up 11 lines
-          System.err.print("\u001B[11A\r");
+          // Move cursor up 12 lines
+          System.err.print("\u001B[12A\r");
         }
         else
         {
           first_file = false;
         }
-        printWriteStatistics(System.err, frame_delay);
+        printWriteStatistics(System.err, frame_delay, current_time - m_time_last_frame);
       }
+      m_time_last_frame = current_time;
       bs = m_sender.pollBitSequence();
     }
-    printWriteStatistics(System.err, frame_delay);
+    printWriteStatistics(System.err, frame_delay, current_time - m_time_last_frame);
     return animator;
   }
   
@@ -296,7 +305,7 @@ public class BtQrSender
     }    
   }
   
-  protected void printWriteStatistics(PrintStream out, int frame_delay)
+  protected void printWriteStatistics(PrintStream out, int frame_delay, long time_since_last_frame_ms)
   {
     int raw_bits = m_sender.getNumberOfRawBits();
     int total_frames = m_sender.getNumberOfFrames();
@@ -305,6 +314,7 @@ public class BtQrSender
     //out.printf("Written to %s                  \n", output_filename);
     out.println("----------------------------------------------------");
     out.printf(" Frames sent:           %03d (%02.1f sec.)      \n", total_frames, (float) total_frames * (float) frame_delay / 100f);
+    out.printf(" Frame rate:            %02d (nominal) %02.1f fps (actual)      \n", 100 / frame_delay, 1000000000f / (float) Math.max(1, time_since_last_frame_ms));
     out.printf(" Buffer state:          %03d bits (%d segments)      \n", m_sender.getBufferSizeBits(), m_sender.getBufferSizeSegments());
     out.println(" Messages sent:         " + (m_sender.getNumberOfMessageSegments() + m_sender.getNumberOfDeltaSegments()) + " (" + total_size + " bits)     ");
     out.println("   Message segments:    " + m_sender.getNumberOfMessageSegments() + " (" + m_sender.getNumberOfMessageSegmentsBits() + " bits, " + m_sender.getNumberOfMessageSegmentsBits() / Math.max(1, m_sender.getNumberOfMessageSegments()) + " bits/seg.)     ");
