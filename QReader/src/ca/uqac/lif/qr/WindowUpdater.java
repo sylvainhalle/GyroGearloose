@@ -45,6 +45,7 @@ public class WindowUpdater extends StoppableRunnable
   @Override
   public LoopStatus actionLoop()
   {
+    long time_beg = System.nanoTime();
     // Poll sender for a new image
     BufferedImage img = m_sender.pollNextImage();
     if (img != null)
@@ -54,9 +55,11 @@ public class WindowUpdater extends StoppableRunnable
       m_window.repaint();
     }
     // Sleep a little while
+    long time_now = System.nanoTime();
+    int actual_refresh = Math.max(0, m_refreshInterval - ((int) ((time_now - time_beg) / 1000000f)));
     try
     {
-      Thread.sleep(m_refreshInterval);
+      Thread.sleep(actual_refresh);
     }
     catch (InterruptedException e)
     {
