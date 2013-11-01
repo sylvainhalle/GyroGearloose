@@ -35,6 +35,7 @@ import ca.uqac.info.buffertannen.message.BitSequence;
 import ca.uqac.info.buffertannen.message.ReadException;
 import ca.uqac.info.buffertannen.message.SchemaElement;
 import ca.uqac.info.buffertannen.protocol.Receiver;
+import ca.uqac.info.util.StoppableRunnable.LoopStatus;
 import ca.uqac.lif.media.FilenameListIterator;
 import ca.uqac.lif.media.VideoFrameIterator;
 import ca.uqac.lif.media.VideoFrameReader;
@@ -719,9 +720,10 @@ public class BtQrReader
     {
       // Either we asked explicitly for live animation, or we use
       // a pipe (which implies it)
-      WindowUpdater wu = new WindowUpdater(animator, 1000/fps);
+      CodeWindowUpdater wu = new CodeWindowUpdater(animator, 1000/fps);
       CodeDisplayFrame m_window = new CodeDisplayFrame(wu);
       wu.setWindow(m_window);
+      wu.setStartState(LoopStatus.SUSPENDED);
       m_window.setVisible(true);
       Thread th = new Thread(wu);
       th.start();

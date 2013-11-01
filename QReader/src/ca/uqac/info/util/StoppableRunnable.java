@@ -57,13 +57,24 @@ public abstract class StoppableRunnable implements Runnable
    * (i.e. the thread can stop itself in this way).
    */
   public abstract LoopStatus actionLoop();
+  
+  public final void setStartState(LoopStatus status)
+  {
+    if (status == LoopStatus.ACTIVE)
+    {
+      m_suspended = false;
+    }
+    else
+    {
+      m_suspended = true;
+    }
+  }
 
   @Override
   public final void run()
   {
     // Start in the active, but suspended state
     m_active = true;
-    m_suspended = true;
     while (m_active)
     {
       // If thread is suspended, wait until someone starts it again
