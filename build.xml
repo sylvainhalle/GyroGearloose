@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="dist" name="Gyro Gearloose">
+
+  <description>Build file for Gyro Gearloose</description>
+  
+  <!-- Set global properties for this build -->
+  <property name="src" location="QReader/src"/>
+  <property name="build" location="QReader/bin"/>
+  <property name="lib" location="QReader/lib"/>
+  <property name="dist"  location="QReader/dist"/>
+  
+  <target name="init">
+    <!-- Create the time stamp -->
+    <tstamp/>
+    <!-- Create the build directory structure used by compile -->
+    <mkdir dir="${build}"/>
+    <mkdir dir="${dist}"/>
+  </target>
+  
+  <target name="compile" depends="init" description="Compile the source">
+    <!-- Compile the java code from ${src} into ${build} -->
+  <javac
+      srcdir="${src}"
+      destdir="${build}"
+      classpath=".:${lib}/BufferTannen.jar"
+      includeantruntime="false" />
+  </target>
+  
+    <!--this file was created by Eclipse Runnable JAR Export Wizard-->
+    <!--ANT 1.7 is required                                        -->
+    <target name="create_run_jar" depends="compile">
+        <jar destfile="${dist}/QRTranslator.jar" filesetmanifest="mergewithoutmain">
+            <manifest>
+                <attribute name="Main-Class" value="ca.uqac.lif.qr.BtQrReader"/>
+                <attribute name="Class-Path" value="."/>
+            </manifest>
+            <fileset dir="${build}"/>
+            <zipfileset excludes="META-INF/*.SF" src="${lib}/BufferTannen.jar"/>
+        </jar>
+    </target>
+    
+  <target name="dist" depends="create_run_jar" description="Create distribution">
+    <!-- Do nothing -->
+    
+  </target>
+</project>
