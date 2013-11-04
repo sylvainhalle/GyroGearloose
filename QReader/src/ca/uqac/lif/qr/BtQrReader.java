@@ -419,20 +419,7 @@ public class BtQrReader
       if (realtime_display && (last_refresh < 0 || current_time - last_refresh > 500000000)) // Refresh display every second or so
       {
         last_refresh = current_time;
-        if (!first_file)
-        {
-          // Move cursor up 14 lines (this is the number of lines written by
-          // {@link #printReadStatistics}
-          if (dont_process)
-            System.err.print("\u001B[5A\r");
-          else
-            System.err.print("\u001B[14A\r");
-        }
-        else
-        {
-          first_file = false;
-        }
-        printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
+        printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files, true);
       }
       String data = null;
       try
@@ -518,23 +505,11 @@ public class BtQrReader
         }        
       }
     }
-    if (!first_file && realtime_display)
-    {
-      // Move cursor up
-      if (dont_process)
-        System.err.print("\u001B[5A\r");
-      else
-        System.err.print("\u001B[14A\r");
-    }
-    else
-    {
-      first_file = false;
-    }
-    printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files);
+    printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files, false);
     System.exit(ERR_OK);    
   }
 
-  protected static void printReadStatistics(PrintStream out, boolean dont_process, Receiver recv, int total_frames, int total_size, int lost_frames, int total_messages, long start_time, int fps, int num_files)
+  public static void printReadStatistics(PrintStream out, boolean dont_process, Receiver recv, int total_frames, int total_size, int lost_frames, int total_messages, long start_time, int fps, int num_files, boolean rewind)
   {
     long end_time = System.nanoTime();
     int raw_bits = recv.getNumberOfRawBits();
@@ -563,7 +538,16 @@ public class BtQrReader
       out.println("   Actual:           " + recv.getNumberOfDistinctBits() + " bits (" + recv.getNumberOfDistinctBits() * fps / Math.max(1, total_frames) + " bits/sec.)     ");
       out.println("   Effective:        " + total_size + " bits (" + total_size * fps / Math.max(1, total_frames) + " bits/sec.)     ");
     }
-    out.println("----------------------------------------------------\n");    
+    out.println("----------------------------------------------------\n");  
+    // Move cursor up 14 lines (this is the number of lines written by
+    // {@link #printReadStatistics}
+    if (rewind)
+    {
+      if (dont_process)
+        out.print("\u001B[5A\r");
+      else
+        out.print("\u001B[14A\r");
+    }
   }
 
   protected static void animate(CommandLine c_line)

@@ -2,6 +2,7 @@ package ca.uqac.lif.qr;
 import org.opencv.core.Core;
 import org.opencv.highgui.VideoCapture;
 
+import ca.uqac.info.buffertannen.protocol.Receiver;
 import ca.uqac.info.util.StoppableRunnable;
 
 
@@ -11,7 +12,9 @@ public class WebcamTest
   public static void main(String[] args)
   {
     System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-    int fps = 10;
+    int fps = 12;
+    Receiver m_btReader = new Receiver();
+    m_btReader.setFrameMaxLength(2500);
     ZXingReadWrite reader = new ZXingReadWrite();
     VideoCapture camera = new VideoCapture(0);
     camera.open(0); //Useless
@@ -24,6 +27,7 @@ public class WebcamTest
     wu.setWindow(window);
     wu.setStartState(StoppableRunnable.LoopStatus.ACTIVE);
     window.setReader(reader);
+    window.setReceiver(m_btReader);
     window.setVisible(true);
     Thread th = new Thread(wu);
     th.start();
