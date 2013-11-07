@@ -3,7 +3,12 @@ package ca.uqac.lif.qr;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 
 import javax.swing.*;
@@ -12,21 +17,31 @@ import ca.uqac.info.buffertannen.message.BitFormatException;
 import ca.uqac.info.buffertannen.message.BitSequence;
 import ca.uqac.info.buffertannen.message.SchemaElement;
 import ca.uqac.info.buffertannen.protocol.Receiver;
+import ca.uqac.lif.qr.CodeDisplayFrame.KeyTrap;
 
 import com.google.zxing.ReaderException;
 
 public class CameraDisplayFrame extends JFrame
 {
-
   /**
    * Dummy UID
    */
   private static final long serialVersionUID = 1L;
   
   /**
+   * Whether to send the frames to the BufferTannen reader
+   */
+  protected boolean m_processEvents = false;
+  
+  /**
    * The panel that will actually contain the image to display
    */
   protected ImagePanel m_imagePanel;
+  
+  /**
+   * Whether a binary file has been written in lake mode
+   */
+  protected boolean file_written = false;
   
   /**
    * The label that displays the code's contents, if any
@@ -46,82 +61,36 @@ public class CameraDisplayFrame extends JFrame
   /**
    * The BufferTannen receiver connected to the camera's frames
    */
-  protected Receiver m_btReceiver;
-  
-  /**
-   * The verbosity level used to display messages
-   */
-  protected int verbosity = 0;
-  
-  /**
-   * Total number of frames processed
-   */
-  protected int total_frames = 0;
-  
-  /**
-   * Total size of frames received
-   */
-  protected int total_size = 0;
-  
-  /**
-   * Total number of lost frames
-   */
-  protected int lost_frames = 0;
-  
-  /**
-   * Total number of lost segments
-   */
-  protected int lost_segments = 0;
-  
-  /**
-   * Total number of messages in communication
-   */
-  protected int total_messages = 0;
-  
-  /**
-   * Whether to send messages to the output
-   */
-  protected boolean mute = true;
-  
-  /**
-   * Number of files processed (?)
-   */
-  protected int num_files = 0;
-  
-  /**
-   * System start time (used to estimate fps)
-   */
-  protected long start_time = 0;
-  
-  /**
-   * Number of frames per second
-   */
-  protected int fps = 12;
+  protected FrameDecoder m_decoder;
   
   /**
    * The window's title
    */
   protected static final String TITLE = "Camera capture";
   
-  public CameraDisplayFrame(WindowUpdater u)
+  public CameraDisplayFrame(WindowUpdater u, int width, int height)
   {
     super(TITLE);
     //super.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     m_imagePanel = new ImagePanel();
-    m_imagePanel.setPreferredSize(new Dimension(640, 480));
+    m_imagePanel.setPreferredSize(new Dimension(width, height));
     super.getContentPane().setBackground(Color.BLACK);
     super.getContentPane().add(m_imagePanel, BorderLayout.CENTER);
-    //JPanel text_panel = new JPanel();
+    KeyListener kl = new KeyTrap();
+    m_imagePanel.addKeyListener(kl);
     m_codeContents = new JLabel();
     m_codeContents.setForeground(Color.WHITE);
     m_codeContents.setFont(m_codeContents.getFont().deriveFont(16f));
-    //text_panel.add(m_codeContents);
     super.getContentPane().add(m_codeContents, BorderLayout.SOUTH);
     m_updater = u;
-    //super.getContentPane().add(box, BorderLayout.CENTER);
     super.setLocationRelativeTo(null); 
     super.pack();
-    start_time = System.nanoTime();
+    super.addKeyListener(kl);    
+  }
+  
+  public CameraDisplayFrame(WindowUpdater u)
+  {
+    this(u, 640, 480);
   }
   
   public void setReader(ZXingReadWrite reader)
@@ -129,14 +98,13 @@ public class CameraDisplayFrame extends JFrame
     m_codeReader = reader;
   }
   
-  public void setReceiver(Receiver receiver)
+  public void setDecoder(FrameDecoder dec)
   {
-    m_btReceiver = receiver;
+    m_decoder = dec;
   }
   
   public void setImage(BufferedImage img)
   {
-    total_frames++;
     m_imagePanel.setImage(img);
     // Try to decode the image
     String contents = null;
@@ -151,61 +119,84 @@ public class CameraDisplayFrame extends JFrame
     {
       // Cannot read code
     }
+    m_decoder.setNewFrame(contents);
     if (contents != null)
     {
       super.setTitle(TITLE + " (good)");
-      BitSequence bs = new BitSequence();
-      try
-      {
-        bs.fromBase64(contents);
-      } catch (BitFormatException e)
-      {
-        if (verbosity >= 2)
-          System.err.println("Cannot decode frame " + (total_frames - 1));
-        lost_frames++;
-        return;
-      }
-      //System.err.printf("%4d/%4d (%2d%%)     \r", total_frames, num_files, (total_frames - lost_frames) * 100 / total_frames);
-      m_btReceiver.putBitSequence(bs);
-      SchemaElement se = m_btReceiver.pollMessage();
-      int lost_now = m_btReceiver.getMessageLostCount();
-      while (se != null)
-      {
-        if (verbosity >= 3)
-          System.err.println("Lost : " + lost_now);
-        total_messages++;
-        BitSequence t_bs = null;
-        try
-        {
-          t_bs = se.toBitSequence();
-        }
-        catch (BitFormatException e)
-        {
-          // Do nothing
-        }
-        total_size += t_bs.size();
-        for (int i = 0; i < lost_now - lost_segments; i++)
-        {
-          if (!mute)
-            System.out.println("This message was lost");
-          if (verbosity >= 2)
-            System.err.println("Lost message " + total_messages);
-        }
-        lost_segments = lost_now;
-        if (!mute)
-          System.out.println(se.toString());
-        se = m_btReceiver.pollMessage();
-        lost_now = m_btReceiver.getMessageLostCount();
-      }
-      BtQrReader.printReadStatistics(System.err, false, m_btReceiver, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files, true);
     }
     else
     {
       super.setTitle(TITLE + " (bad)");
       m_codeContents.setText(" ");
-      lost_frames++;
-      BtQrReader.printReadStatistics(System.err, false, m_btReceiver, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files, true);
     }
     super.repaint();
+    if (!file_written && m_decoder.dataIsReady())
+    {
+      // Save binary data to a file
+      BitSequence bs = m_decoder.pollBinaryBuffer(-1);
+      byte[] byte_contents = bs.toByteArray();
+      try
+      {
+        String filename = m_decoder.getResourceIdentifier();
+        FileOutputStream fos = new FileOutputStream(new File("/tmp/" + filename));
+        fos.write(byte_contents);
+        fos.close();
+      } catch (FileNotFoundException e)
+      {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      } catch (IOException e)
+      {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+      file_written = true; // So that we don't save the file every time
+    }
+  }
+
+  protected class KeyTrap implements KeyListener
+  {
+    @Override
+    public void keyPressed(KeyEvent arg0) {  }
+
+    @Override
+    public void keyReleased(KeyEvent arg0) {  }
+
+    @Override
+    public void keyTyped(KeyEvent arg0)
+    {
+      char key = arg0.getKeyChar();
+      switch (key)
+      {
+      case 's':
+      case 'S':
+        // Start/stop the automatic refresh
+        m_updater.toggle();
+        break;
+      case 'p':
+      case 'P':
+        // Toggle processing of events
+        m_processEvents = !m_processEvents;
+        m_decoder.setProcessEvents(m_processEvents);
+        break;
+      case 'r':
+      case 'R':
+        // Reset statistics
+        m_decoder.reset();
+        break;
+      case 'q':
+      case 'Q':
+        // Quit by closing containing class (the JFrame)
+        //CodeDisplayFrame.this.dispose();
+        System.exit(0);
+        break;
+      case ' ':
+        m_updater.actionLoop();
+        break;
+      default:
+        // Do nothing
+        break;
+      }
+    }
   }
 }

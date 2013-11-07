@@ -22,6 +22,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -86,11 +87,13 @@ public class BtQrSender
    */
   protected int m_frameDelay = 13; // = 8 fps
   
-  public BtQrSender(int frame_length, boolean display_stats, int image_size, int frame_delay, BarcodeFormat format, ErrorCorrectionLevel level)
+  public BtQrSender(int frame_length, boolean display_stats, int image_size, int frame_delay, BarcodeFormat format, ErrorCorrectionLevel level, Sender.SendingMode sending_mode, boolean lake_loop)
   {
     super();
     m_sender = new Sender();
     m_sender.setFrameMaxLength(frame_length);
+    m_sender.setSendingMode(sending_mode);
+    m_sender.setLakeLoop(lake_loop);
     m_displayStats = display_stats;
     m_imageSize = image_size;
     m_frameDelay = frame_delay;
@@ -100,6 +103,16 @@ public class BtQrSender
     m_readerWriter.setBarcodeFormat(format);
     m_readerWriter.setErrorCorrectionLevel(level);
     m_firstFrame = true;
+  }
+  
+  public void setResourceIdentifier(String s)
+  {
+    m_sender.setResourceIdentifier(s);
+  }
+  
+  public void setDataStreamIndex(int index)
+  {
+    m_sender.setDataStreamIndex(index);
   }
   
   public BufferedImage pollNextImage()
@@ -133,33 +146,33 @@ public class BtQrSender
     {
       if (!m_firstFrame)
       {
-        // Move cursor up 13 lines
-        System.err.print("\u001B[13A\r");
+        // Move cursor up 14 lines
+        System.err.print("\u001B[14A\r");
       }
       else
       {
         m_firstFrame = false;
       }
       long current_time = System.nanoTime();
-      printWriteStatistics(System.err, m_frameDelay, current_time - m_time_last_frame);
+      printWriteStatistics(System.err, m_frameDelay, current_time - m_time_last_frame, m_sender.getSendingMode());
       m_time_last_frame = current_time;
     }
     return image_out;
   }
   
-  protected void animate(String out_filename, int frame_rate, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
+  protected void animate(String out_filename, int frame_rate, int image_size, BarcodeFormat format, ErrorCorrectionLevel level, Sender.SendingMode mode)
   {
-    GifAnimator animator = createAnimation(frame_rate, image_size, format, level);
+    GifAnimator animator = createAnimation(frame_rate, image_size, format, level, mode);
     animator.getAnimation(frame_rate, out_filename);
   }
   
-  protected byte[] animate(int frame_delay, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
+  protected byte[] animate(int frame_delay, int image_size, BarcodeFormat format, ErrorCorrectionLevel level, Sender.SendingMode mode)
   {
-    GifAnimator animator = createAnimation(frame_delay, image_size, format, level);
+    GifAnimator animator = createAnimation(frame_delay, image_size, format, level, mode);
     return animator.getAnimation(frame_delay);
   }
   
-  protected GifAnimator createAnimation(int frame_delay, int image_size, BarcodeFormat format, ErrorCorrectionLevel level)
+  protected GifAnimator createAnimation(int frame_delay, int image_size, BarcodeFormat format, ErrorCorrectionLevel level, Sender.SendingMode mode)
   {
     GifAnimator animator = new GifAnimator();
     BitSequence bs = m_sender.pollBitSequence();
@@ -197,12 +210,12 @@ public class BtQrSender
         {
           first_file = false;
         }
-        printWriteStatistics(System.err, frame_delay, current_time - m_time_last_frame);
+        printWriteStatistics(System.err, frame_delay, current_time - m_time_last_frame, mode);
       }
       m_time_last_frame = current_time;
       bs = m_sender.pollBitSequence();
     }
-    printWriteStatistics(System.err, frame_delay, current_time - m_time_last_frame);
+    printWriteStatistics(System.err, frame_delay, current_time - m_time_last_frame, mode);
     return animator;
   }
   
@@ -245,6 +258,43 @@ public class BtQrSender
     }
     Thread th = new Thread(pr);
     th.start();
+  }
+  
+  protected void readBlob(File f)
+  {
+    try
+    {
+      FileInputStream fis = new FileInputStream(f);
+      BufferedInputStream bis = new BufferedInputStream(fis);
+      int totalBytesRead = 0;
+      byte[] result = new byte[(int)f.length()];
+      while(totalBytesRead < result.length)
+      {
+        int bytesRemaining = result.length - totalBytesRead;
+        //input.read() returns -1, 0, or more :
+        int bytesRead = bis.read(result, totalBytesRead, bytesRemaining); 
+        if (bytesRead > 0)
+        {
+          totalBytesRead = totalBytesRead + bytesRead;
+        }
+      }
+      // Split data into binary fragments
+      int max_length = m_sender.getMaxBlobSize() - 100; // For safety, we trim 100 bits off advertised max length
+      BitSequence seq = new BitSequence(result, result.length * 8);
+      while (!seq.isEmpty())
+      {
+        BitSequence part = seq.truncatePrefix(max_length);
+        m_sender.addBlob(part);
+      }
+    } catch (IOException e)
+    {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    } catch (BitFormatException e)
+    {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }    
   }
   
   /**
@@ -305,7 +355,7 @@ public class BtQrSender
     }    
   }
   
-  protected void printWriteStatistics(PrintStream out, int frame_delay, long time_since_last_frame_ms)
+  protected void printWriteStatistics(PrintStream out, int frame_delay, long time_since_last_frame_ms, Sender.SendingMode mode)
   {
     int raw_bits = m_sender.getNumberOfRawBits();
     int total_frames = m_sender.getNumberOfFrames();
@@ -313,6 +363,15 @@ public class BtQrSender
     // In the following, we use Math.max to avoid divisions by zero when no segment is sent yet
     //out.printf("Written to %s                  \n", output_filename);
     out.println("----------------------------------------------------");
+    out.print(" Sending mode:          ");
+    if (mode == Sender.SendingMode.LAKE)
+    {
+      out.println("lake     ");
+    }
+    else
+    {
+      out.println("stream   ");
+    }
     out.printf(" Frames sent:           %03d (%02.1f sec.)      \n", total_frames, (float) total_frames * (float) frame_delay / 100f);
     out.printf(" Frame rate:            %02d (nominal) %02.1f fps (actual)      \n", 100 / frame_delay, 1000000000f / (float) Math.max(1, time_since_last_frame_ms));
     out.printf(" Buffer state:          %03d bits (%d segments)      \n", m_sender.getBufferSizeBits(), m_sender.getBufferSizeSegments());

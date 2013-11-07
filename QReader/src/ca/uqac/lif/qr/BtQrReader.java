@@ -22,6 +22,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.io.IOException;
 import java.util.Iterator;
@@ -29,12 +30,16 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.commons.cli.*;
+import org.opencv.core.Core;
+import org.opencv.highgui.VideoCapture;
 
 import ca.uqac.info.buffertannen.message.BitFormatException;
 import ca.uqac.info.buffertannen.message.BitSequence;
 import ca.uqac.info.buffertannen.message.ReadException;
 import ca.uqac.info.buffertannen.message.SchemaElement;
 import ca.uqac.info.buffertannen.protocol.Receiver;
+import ca.uqac.info.buffertannen.protocol.Sender;
+import ca.uqac.info.util.StoppableRunnable;
 import ca.uqac.info.util.StoppableRunnable.LoopStatus;
 import ca.uqac.lif.media.FilenameListIterator;
 import ca.uqac.lif.media.VideoFrameIterator;
@@ -161,6 +166,12 @@ public class BtQrReader
             .create();
     options.addOption(opt);
     opt = OptionBuilder
+        .withLongOpt("noloop")
+        .withDescription(
+            "Don't loop through frames when sending in lake mode")
+            .create();
+    options.addOption(opt);
+    opt = OptionBuilder
         .withLongOpt("level")
         .withArgName("x")
         .hasArg()
@@ -225,9 +236,27 @@ public class BtQrReader
             .create();
     options.addOption(opt);
     opt = OptionBuilder
+        .withLongOpt("camera")
+        .withDescription(
+            "Read frames from webcam")
+            .create();
+    options.addOption(opt);
+    opt = OptionBuilder
         .withLongOpt("stdin")
         .withDescription(
             "Read trace from stdin")
+            .create();
+    options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("binary")
+        .withDescription(
+            "Encode input file as blob segments")
+            .create();
+    options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("lake")
+        .withDescription(
+            "Send in lake mode")
             .create();
     options.addOption(opt);
     opt = OptionBuilder
@@ -242,6 +271,22 @@ public class BtQrReader
         .hasArg()
         .withDescription(
             "Read trace from named pipe file")
+            .create("p");
+    options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("resourceid")
+        .withArgName("s")
+        .hasArg()
+        .withDescription(
+            "Set resource identifier to s")
+            .create("p");
+    options.addOption(opt);
+    opt = OptionBuilder
+        .withLongOpt("streamindex")
+        .withArgName("i")
+        .hasArg()
+        .withDescription(
+            "Set data stream index to i")
             .create("p");
     options.addOption(opt);
     return options;
@@ -286,15 +331,13 @@ public class BtQrReader
 
   protected static void read(CommandLine c_line)
   {
-    int lost_frames = 0, total_frames = 0;
-    int lost_segments = 0;
-    int total_messages = 0, total_size = 0;
-    int frame_size = 0;
     int binarization_threshold = 128;
     int verbosity = 0;
     int fps = 8;
     boolean first_file = true, dont_process = false;
+    boolean from_camera = false;
     boolean guess_threshold = false, mute = false;
+    boolean in_binary = false;
     boolean realtime_display = true;
     @SuppressWarnings("unchecked")
     List<String> remaining_args = c_line.getArgList();
@@ -303,18 +346,17 @@ public class BtQrReader
     {
       verbosity = Integer.parseInt(c_line.getOptionValue("verbosity"));
     }
-    if (c_line.hasOption("framesize"))
+    if (c_line.hasOption("binary"))
     {
-      frame_size = Integer.parseInt(c_line.getOptionValue("framesize"));
-    }
-    else
-    {
-      System.err.println("ERROR: a maximum frame size must be specified in order to read");
-      System.exit(ERR_ARGUMENTS);
+      in_binary = true;
     }
     if (c_line.hasOption("noprocess"))
     {
       dont_process = true;
+    }
+    if (c_line.hasOption("camera"))
+    {
+      from_camera = true;
     }
     if (c_line.hasOption("framerate"))
     {
@@ -352,9 +394,11 @@ public class BtQrReader
 
     // Instantiate BufferTannen receiver
     Receiver recv = new Receiver();
-    recv.setFrameMaxLength(frame_size);
     recv.setVerbosity(verbosity);
     recv.setConsole(System.err);
+    FrameDecoder fd = new FrameDecoder();
+    fd.setReceiver(recv);
+    fd.setProcessEvents(!dont_process);
 
     long last_refresh = -1;
     int num_files = 1;
@@ -399,13 +443,44 @@ public class BtQrReader
       image_source = new VideoFrameIterator(vfr);
       num_files = vfr.getNumFrames(fps);
     }
-    else
+    else if (!from_camera)
     {
       // File is an image: iterate over each filename passed as argument
       image_source = new FilenameListIterator(filenames);
       num_files = filenames.size();
     }
-    long start_time = System.nanoTime();
+    else
+    {
+      // Read from webcam
+      System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+      VideoCapture camera = new VideoCapture(0);
+      camera.open(0); //Useless
+      if(!camera.isOpened())
+      {
+        System.out.println("Camera Error");
+      }
+      CameraWindowUpdater wu = new CameraWindowUpdater(camera, 1000/fps);
+      CameraDisplayFrame window = new CameraDisplayFrame(wu);
+      wu.setWindow(window);
+      wu.setStartState(StoppableRunnable.LoopStatus.ACTIVE);
+      window.setReader(reader_writer);
+      window.setDecoder(fd);
+      window.setVisible(true);
+      Thread th = new Thread(wu);
+      th.start();
+      while (th.isAlive())
+      {
+        try
+        {
+          Thread.sleep(1000);
+        } catch (InterruptedException e)
+        {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+      }
+      System.exit(ERR_OK);
+    }
     while (image_source.hasNext())
     {
       BufferedImage img = image_source.next();
@@ -414,12 +489,11 @@ public class BtQrReader
         // Another way of checking if frames remain
         break;
       }
-      total_frames++;
       long current_time = System.nanoTime();
       if (realtime_display && (last_refresh < 0 || current_time - last_refresh > 500000000)) // Refresh display every second or so
       {
         last_refresh = current_time;
-        printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files, true);
+        fd.printReadStatistics(true);
       }
       String data = null;
       try
@@ -451,103 +525,50 @@ public class BtQrReader
           }
         }        
       }
+      BitSequence bs = new BitSequence();
       if (data == null)
       {
-        if (verbosity >= 2)
-          System.err.println("Cannot decode frame " + (total_frames - 1));
-        lost_frames++;
-        continue;
+        bs = null;
       }
-      BitSequence bs = new BitSequence();
-      try
+      else
       {
-        bs.fromBase64(data);
-      } catch (BitFormatException e)
-      {
-        if (verbosity >= 2)
-          System.err.println("Cannot decode frame " + (total_frames - 1));
-        lost_frames++;
-        continue;
-      }
-      //System.err.printf("%4d/%4d (%2d%%)     \r", total_frames, num_files, (total_frames - lost_frames) * 100 / total_frames);
-      if (!dont_process)
-      {
-        recv.putBitSequence(bs);
-        SchemaElement se = recv.pollMessage();
-        int lost_now = recv.getMessageLostCount();
-        while (se != null)
+        try
         {
-          if (verbosity >= 3)
-            System.err.println("Lost : " + lost_now);
-          total_messages++;
-          BitSequence t_bs = null;
-          try
-          {
-            t_bs = se.toBitSequence();
-          }
-          catch (BitFormatException e)
-          {
-            // Do nothing
-          }
-          total_size += t_bs.size();
-          for (int i = 0; i < lost_now - lost_segments; i++)
-          {
-            if (!mute)
-              System.out.println("This message was lost");
-            if (verbosity >= 2)
-              System.err.println("Lost message " + total_messages);
-          }
-          lost_segments = lost_now;
-          if (!mute)
-            System.out.println(se.toString());
-          se = recv.pollMessage();
-          lost_now = recv.getMessageLostCount();
-        }        
+          bs.fromBase64(data);
+        }
+        catch (BitFormatException e)
+        {
+          bs = null;
+        }
+      }
+      fd.setNewFrame(bs);        
+    }
+    fd.printReadStatistics(false);
+    if (in_binary)
+    {
+      // Save file
+      if (fd.dataIsReady())
+      {
+        // Save binary data to a file
+        BitSequence bs = fd.pollBinaryBuffer(-1);
+        byte[] contents = bs.toByteArray();
+        try
+        {
+          FileOutputStream fos = new FileOutputStream(new File("/tmp/yadda.txt"));
+          fos.write(contents);
+          fos.close();
+        } catch (FileNotFoundException e)
+        {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        } catch (IOException e)
+        {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
       }
     }
-    printReadStatistics(System.err, dont_process, recv, total_frames, total_size, lost_frames, total_messages, start_time, fps, num_files, false);
     System.exit(ERR_OK);    
-  }
-
-  public static void printReadStatistics(PrintStream out, boolean dont_process, Receiver recv, int total_frames, int total_size, int lost_frames, int total_messages, long start_time, int fps, int num_files, boolean rewind)
-  {
-    long end_time = System.nanoTime();
-    int raw_bits = recv.getNumberOfRawBits();
-    long processing_time_ms = (end_time - start_time) / 1000000;
-    //out.println("Processing results               ");
-    out.println("----------------------------------------------------");
-    out.printf(" Progress:           %04d/%04d (%02.1f sec. @%d fps)     \n", total_frames, num_files, (float) total_frames / (float) fps, fps);
-    out.println(" Link quality:       " + (total_frames - lost_frames) + "/" + total_frames + " (" + ((total_frames - lost_frames) * 100 / Math.max(1, total_frames)) + "%)     ");
-    if (!dont_process)
-    {
-      out.print(" Messages received:  " + total_messages + "/" + (total_messages + recv.getMessageLostCount()));
-      if (total_messages + recv.getMessageLostCount() > 0)
-        out.println(" (" + (total_messages * 100 / (total_messages + recv.getMessageLostCount())) + "%)     ");
-      else
-        out.println("     ");
-      out.println("   Message segments: " + recv.getNumberOfMessageSegments() + " (" + recv.getNumberOfMessageSegmentsBits() + " bits)     ");
-      out.println("   Delta segments:   " + recv.getNumberOfDeltaSegments() + " (" + recv.getNumberOfDeltaSegmentsBits() + " bits)     ");
-      out.println("   Schema segments:  " + recv.getNumberOfSchemaSegments() + " (" + recv.getNumberOfSchemaSegmentsBits() + " bits)     ");
-      out.print(" Processing rate:    " + processing_time_ms / Math.max(1, total_frames) + " ms/frame ");
-      if (processing_time_ms > 0)
-        out.println("(" + (total_frames * 1000 / processing_time_ms) + " fps)     ");
-      else
-        out.println("     ");
-      out.println(" Bandwidth:");
-      out.println("   Raw:              " + raw_bits + " bits (" + raw_bits * fps / Math.max(1, total_frames) + " bits/sec.)     ");
-      out.println("   Actual:           " + recv.getNumberOfDistinctBits() + " bits (" + recv.getNumberOfDistinctBits() * fps / Math.max(1, total_frames) + " bits/sec.)     ");
-      out.println("   Effective:        " + total_size + " bits (" + total_size * fps / Math.max(1, total_frames) + " bits/sec.)     ");
-    }
-    out.println("----------------------------------------------------\n");  
-    // Move cursor up 14 lines (this is the number of lines written by
-    // {@link #printReadStatistics}
-    if (rewind)
-    {
-      if (dont_process)
-        out.print("\u001B[5A\r");
-      else
-        out.print("\u001B[14A\r");
-    }
   }
 
   protected static void animate(CommandLine c_line)
@@ -556,6 +577,10 @@ public class BtQrReader
     String output_filename = "", pipe_filename = "";
     BarcodeFormat format = BarcodeFormat.QR_CODE;
     ErrorCorrectionLevel level = ErrorCorrectionLevel.L;
+    Sender.SendingMode mode = Sender.SendingMode.STREAM;
+    int data_stream_index = 0;
+    String resource_identifier = "";
+    boolean lake_loop = true, in_binary = false;
     boolean animate_live = false, display_stats = true;
     boolean from_stdin = false;
 
@@ -573,6 +598,18 @@ public class BtQrReader
     if (c_line.hasOption("framesize"))
     {
       frame_size = Integer.parseInt(c_line.getOptionValue("framesize"));
+    }
+    if (c_line.hasOption("binary"))
+    {
+      in_binary = true;
+    }
+    if (c_line.hasOption("lake"))
+    {
+      mode = Sender.SendingMode.LAKE;
+    }
+    if (c_line.hasOption("noloop"))
+    {
+      lake_loop = false;
     }
     if (c_line.hasOption("framerate"))
     {
@@ -593,6 +630,14 @@ public class BtQrReader
     if (c_line.hasOption("nodisplay"))
     {
       display_stats = false;
+    }
+    if (c_line.hasOption("resourceid"))
+    {
+      resource_identifier = c_line.getOptionValue("resourceid");
+    }
+    if (c_line.hasOption("streamindex"))
+    {
+      data_stream_index = Integer.parseInt(c_line.getOptionValue("streamindex"));
     }
     if (c_line.hasOption("level"))
     {
@@ -639,7 +684,9 @@ public class BtQrReader
       }
     }
 
-    BtQrSender animator = new BtQrSender(frame_size, display_stats, image_size, 100/fps, format, level);
+    BtQrSender animator = new BtQrSender(frame_size, display_stats, image_size, 100/fps, format, level, mode, lake_loop);
+    animator.setDataStreamIndex(data_stream_index);
+    animator.setResourceIdentifier(resource_identifier);
     String trace_filename = "";
     if (remaining_args.size() < 2 && !from_stdin && pipe_filename.isEmpty())
     {
@@ -697,7 +744,14 @@ public class BtQrReader
     {
       // Input message source is a file
       trace_filename = remaining_args.get(1);
-      animator.readMessages(new File(trace_filename));
+      if (in_binary)
+      {
+        animator.readBlob(new File(trace_filename));
+      }
+      else
+      {
+        animator.readMessages(new File(trace_filename));
+      }
     }
     // --- Setup output ---
     if (animate_live || !pipe_filename.isEmpty())
@@ -728,7 +782,7 @@ public class BtQrReader
       if (output_filename.isEmpty())
       {
         // Output image to stdout
-        byte[] image = animator.animate(100/fps, image_size, format, level);
+        byte[] image = animator.animate(100/fps, image_size, format, level, mode);
         try
         {
           System.out.write(image);
@@ -742,7 +796,7 @@ public class BtQrReader
       else
       {
         // Output image to file
-        animator.animate(output_filename, 100/fps, image_size, format, level);
+        animator.animate(output_filename, 100/fps, image_size, format, level, mode);
       }
     }
     System.exit(ERR_OK);
@@ -837,6 +891,10 @@ public class BtQrReader
    */
   protected static boolean isVideoFile(String filename)
   {
+    if (filename == null)
+    {
+      return false;
+    }
     String extension = getFileExtension(filename);
     return extension.compareToIgnoreCase("mp4") == 0 || extension.compareToIgnoreCase("avi") == 0 || extension.compareToIgnoreCase("mkv") == 0;
   }

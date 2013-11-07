@@ -36,7 +36,8 @@ public class CameraWindowUpdater extends WindowUpdater
     Mat frame = new Mat();
     m_camera.read(frame);
     MatOfByte buf = new MatOfByte();
-    Highgui.imencode(".png", frame, buf);
+    //Highgui.imencode(".png", frame, buf);
+    Highgui.imencode(".bmp", frame, buf);
     byte[] bytes = buf.toArray();
     ByteArrayInputStream in = new ByteArrayInputStream(bytes);
     BufferedImage img = null;
