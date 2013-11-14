@@ -31,7 +31,7 @@
     <target name="create_run_jar" depends="compile">
         <jar destfile="${dist}/QRTranslator.jar" filesetmanifest="mergewithoutmain">
             <manifest>
-                <attribute name="Main-Class" value="ca.uqac.lif.qr.BtQrReader"/>
+                <attribute name="Main-Class" value="ca.uqac.lif.qr.FrontEnd"/>
                 <attribute name="Class-Path" value="."/>
             </manifest>
             <fileset dir="${build}"/>

@@ -6,6 +6,7 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.highgui.Highgui;
@@ -17,26 +18,40 @@ public class CameraWindowUpdater extends WindowUpdater
   
   protected CameraDisplayFrame m_window;
   
-  public CameraWindowUpdater(VideoCapture camera, int interval)
+  protected ZXingReader m_reader;
+  
+  protected FrameDecoder m_decoder;
+  
+  public CameraWindowUpdater(CameraDisplayFrame window, ZXingReader reader, FrameDecoder decoder, int interval)
   {
     super(interval);
-    m_camera = camera;
+    m_window = window;
+    m_reader = reader;
+    m_decoder = decoder;
+    System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    m_camera = new VideoCapture(0);
+    m_camera.open(0);
+    if(!m_camera.isOpened())
+    {
+      System.err.println("Camera Error");
+      System.exit(FrontEnd.ERR_IO);
+    }
   }
   
-  public void setWindow(CameraDisplayFrame w)
+  public void setProcessEvents(boolean b)
   {
-    m_window = w;
+    m_decoder.setProcessEvents(b);
   }
-
-  @Override
-  public LoopStatus actionLoop()
+  
+  /**
+   * Attempt to read a frame from the camera
+   * @return
+   */
+  protected BufferedImage getCameraFrame()
   {
-    long time_beg = System.nanoTime();
-    // Poll sender for a new image
     Mat frame = new Mat();
     m_camera.read(frame);
     MatOfByte buf = new MatOfByte();
-    //Highgui.imencode(".png", frame, buf);
     Highgui.imencode(".bmp", frame, buf);
     byte[] bytes = buf.toArray();
     ByteArrayInputStream in = new ByteArrayInputStream(bytes);
@@ -49,26 +64,43 @@ public class CameraWindowUpdater extends WindowUpdater
     {
       // Could not read image
     }
+    return img;
+  }
+
+  @Override
+  public LoopStatus actionLoop()
+  {
+    long time_beg = System.nanoTime();
+    // Poll sender for a new image
+    BufferedImage img = getCameraFrame();
     if (img != null)
     {
       // A new image was sent: update the window
       m_window.setImage(img);
+      String contents = m_reader.readCode(img);
+      m_window.setFrameContents(contents);
       m_window.repaint();
+      m_decoder.setNewFrame(contents); 
     }
     // Sleep a little while
     long time_now = System.nanoTime();
     int actual_refresh = Math.max(0, m_refreshInterval - ((int) ((time_now - time_beg) / 1000000f)));
+    safeSleep(actual_refresh);
+    // We want to be called again
+    return LoopStatus.ACTIVE;
+  }
+  
+  protected static void safeSleep(int duration)
+  {
     try
     {
-      Thread.sleep(actual_refresh);
+      Thread.sleep(duration);
     }
     catch (InterruptedException e)
     {
-      // TODO Auto-generated catch block
+      // Do nothing
       e.printStackTrace();
     }
-    // We want to be called again
-    return LoopStatus.ACTIVE;
   }
 
 }

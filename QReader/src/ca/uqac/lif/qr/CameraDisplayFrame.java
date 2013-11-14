@@ -6,20 +6,8 @@ import java.awt.Dimension;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 
 import javax.swing.*;
-
-import ca.uqac.info.buffertannen.message.BitFormatException;
-import ca.uqac.info.buffertannen.message.BitSequence;
-import ca.uqac.info.buffertannen.message.SchemaElement;
-import ca.uqac.info.buffertannen.protocol.Receiver;
-import ca.uqac.lif.qr.CodeDisplayFrame.KeyTrap;
-
-import com.google.zxing.ReaderException;
 
 public class CameraDisplayFrame extends JFrame
 {
@@ -39,36 +27,21 @@ public class CameraDisplayFrame extends JFrame
   protected ImagePanel m_imagePanel;
   
   /**
-   * Whether a binary file has been written in lake mode
-   */
-  protected boolean file_written = false;
-  
-  /**
    * The label that displays the code's contents, if any
    */
   protected JLabel m_codeContents;
   
   /**
-   * The thread responsible for updating the window
+   * The code updater that animates this window.
    */
-  protected WindowUpdater m_updater;
-  
-  /**
-   * The code reader to be called to process the frames
-   */
-  protected ZXingReadWrite m_codeReader;
-  
-  /**
-   * The BufferTannen receiver connected to the camera's frames
-   */
-  protected FrameDecoder m_decoder;
+  protected CameraWindowUpdater m_updater;
   
   /**
    * The window's title
    */
   protected static final String TITLE = "Camera capture";
   
-  public CameraDisplayFrame(WindowUpdater u, int width, int height)
+  public CameraDisplayFrame(int width, int height)
   {
     super(TITLE);
     //super.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -82,44 +55,29 @@ public class CameraDisplayFrame extends JFrame
     m_codeContents.setForeground(Color.WHITE);
     m_codeContents.setFont(m_codeContents.getFont().deriveFont(16f));
     super.getContentPane().add(m_codeContents, BorderLayout.SOUTH);
-    m_updater = u;
     super.setLocationRelativeTo(null); 
     super.pack();
     super.addKeyListener(kl);    
   }
   
-  public CameraDisplayFrame(WindowUpdater u)
+  public CameraDisplayFrame()
   {
-    this(u, 640, 480);
+    // Assume VGA as default resolution
+    this(640, 480);
   }
   
-  public void setReader(ZXingReadWrite reader)
+  public void setUpdater(CameraWindowUpdater upd)
   {
-    m_codeReader = reader;
-  }
-  
-  public void setDecoder(FrameDecoder dec)
-  {
-    m_decoder = dec;
+    m_updater = upd;
   }
   
   public void setImage(BufferedImage img)
   {
     m_imagePanel.setImage(img);
-    // Try to decode the image
-    String contents = null;
-    try
-    {
-      contents = m_codeReader.readCode(img);
-    } catch (IOException e)
-    {
-      // Cannot read code
-    }
-    catch (ReaderException e)
-    {
-      // Cannot read code
-    }
-    m_decoder.setNewFrame(contents);
+  }
+  
+  public void setFrameContents(String contents)
+  {
     if (contents != null)
     {
       super.setTitle(TITLE + " (good)");
@@ -129,31 +87,8 @@ public class CameraDisplayFrame extends JFrame
       super.setTitle(TITLE + " (bad)");
       m_codeContents.setText(" ");
     }
-    super.repaint();
-    if (!file_written && m_decoder.dataIsReady())
-    {
-      // Save binary data to a file
-      BitSequence bs = m_decoder.pollBinaryBuffer(-1);
-      byte[] byte_contents = bs.toByteArray();
-      try
-      {
-        String filename = m_decoder.getResourceIdentifier();
-        FileOutputStream fos = new FileOutputStream(new File("/tmp/" + filename));
-        fos.write(byte_contents);
-        fos.close();
-      } catch (FileNotFoundException e)
-      {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      } catch (IOException e)
-      {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      }
-      file_written = true; // So that we don't save the file every time
-    }
   }
-
+  
   protected class KeyTrap implements KeyListener
   {
     @Override
@@ -177,21 +112,17 @@ public class CameraDisplayFrame extends JFrame
       case 'P':
         // Toggle processing of events
         m_processEvents = !m_processEvents;
-        m_decoder.setProcessEvents(m_processEvents);
+        m_updater.setProcessEvents(m_processEvents);
         break;
       case 'r':
       case 'R':
         // Reset statistics
-        m_decoder.reset();
         break;
       case 'q':
       case 'Q':
         // Quit by closing containing class (the JFrame)
         //CodeDisplayFrame.this.dispose();
-        System.exit(0);
-        break;
-      case ' ':
-        m_updater.actionLoop();
+        m_updater.stop();
         break;
       default:
         // Do nothing

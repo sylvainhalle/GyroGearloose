@@ -25,7 +25,7 @@ import java.util.*;
 
 import javax.imageio.ImageIO;
 
-import com.google.zxing.ReaderException;
+import com.google.zxing.Result;
 
 /**
  * Provides functionalitities to find the best binarization threshold
@@ -50,12 +50,13 @@ public class ThresholdGuesser
   /**
    * An instance of QR code reader to use for the decoding
    */
-  protected static final ZXingReadWrite s_decoder = new ZXingReadWrite();
+  protected final ZXingReader s_decoder;
   
-  public ThresholdGuesser()
+  public ThresholdGuesser(ZXingReader reader)
   {
     super();
     m_sources = new LinkedList<BufferedImage>();
+    s_decoder = reader;
   }
   
   /**
@@ -130,7 +131,7 @@ public class ThresholdGuesser
    * @param step Threshold increment on each iteration
    * @return The threshold value that maximizes the number of decoded images
    */
-  public static int guessThreshold(List<BufferedImage> images, int start, int end, int step)
+  public int guessThreshold(List<BufferedImage> images, int start, int end, int step)
   {
     return guessThreshold(images, start, end, step, start);
   }
@@ -151,7 +152,7 @@ public class ThresholdGuesser
    * @param starting_point The starting point to search from
    * @return The threshold value that maximizes the number of decoded images
    */
-  public static int guessThreshold(List<BufferedImage> images, int start, int end, int step, int starting_point)
+  public int guessThreshold(List<BufferedImage> images, int start, int end, int step, int starting_point)
   {
     int best_threshold = 0;
     int best_decoded = 0;
@@ -192,20 +193,13 @@ public class ThresholdGuesser
     return best_threshold;
   }
   
-  protected static int countDecoded(List<BufferedImage> images, int threshold)
+  protected int countDecoded(List<BufferedImage> images, int threshold)
   {
     int num_decoded = 0;
-    String value = null;
+    Result value = null;
     for (BufferedImage bi : images)
     {
-      try
-      {
-        value = s_decoder.readCode(bi, threshold);
-      }
-      catch (ReaderException e)
-      {
-        // Nothing to do; this only means we could not decode
-      }
+      value = s_decoder.readCode(bi, threshold);
       if (value != null)
       {
         num_decoded++;

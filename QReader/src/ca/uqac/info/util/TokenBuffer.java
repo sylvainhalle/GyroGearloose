@@ -38,7 +38,10 @@ public class TokenBuffer
   
   public void append(String s)
   {
-    m_bufferedContents.append(s);
+    if (!s.isEmpty())
+    {
+      m_bufferedContents.append(s);
+    }
   }
   
   public void append(char[] cbuf)

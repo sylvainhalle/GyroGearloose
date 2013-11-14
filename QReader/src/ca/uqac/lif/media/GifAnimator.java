@@ -19,7 +19,12 @@ package ca.uqac.lif.media;
 
 import magick.*;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.*;
+
+import javax.imageio.ImageIO;
 
 /**
  * Creates an animated Gif from a set of images.
@@ -61,6 +66,30 @@ public class GifAnimator
     {
       return false;
     }
+  }
+
+  /**
+   * Adds an image to the animation
+   * @param img The image's contents
+   * @return false if image could not be added
+   */
+  public boolean addImage(BufferedImage img)
+  {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    try
+    {
+      ImageIO.write(img, "png", bos);
+      bos.flush();
+      byte[] bytes = bos.toByteArray();
+      bos.close();
+      return addImage(bytes);
+    }
+    catch (IOException e)
+    {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+    return false;
   }
   
   /**
