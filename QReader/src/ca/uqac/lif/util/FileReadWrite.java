@@ -1,4 +1,4 @@
-package ca.uqac.info.util;
+package ca.uqac.lif.util;
 
 import java.io.File;
 import java.io.FileOutputStream;

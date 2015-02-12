@@ -22,7 +22,7 @@ import java.io.IOException;
 import ca.uqac.info.buffertannen.message.BitSequence;
 import ca.uqac.info.buffertannen.message.ReadException;
 import ca.uqac.info.buffertannen.protocol.UnknownSchemaException;
-import ca.uqac.info.util.TokenBuffer;
+import ca.uqac.lif.util.TokenBuffer;
 
 public class FrameEncoderMessage extends FrameEncoder
 {

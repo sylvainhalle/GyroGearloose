@@ -17,7 +17,7 @@
  */
 package ca.uqac.lif.qr;
 
-import ca.uqac.info.util.StoppableRunnable;
+import ca.uqac.lif.util.StoppableRunnable;
 
 public abstract class WindowUpdater extends StoppableRunnable
 {

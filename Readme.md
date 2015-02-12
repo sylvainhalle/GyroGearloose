@@ -33,6 +33,17 @@ you use:
 and do **not** create subfolders there (i.e. put all archives directly
 in that folder).
 
+### OpenCV
+
+[OpenCV](http://opencv.org/downloads.html) is required to use a camera. This
+is a hefty download, which then requires some extensive installation steps
+for [Linux](http://docs.opencv.org/doc/tutorials/introduction/linux_install/linux_install.html#linux-installation)
+or [Windows](http://docs.opencv.org/doc/tutorials/introduction/windows_install/windows_install.html#windows-installation).
+Once the build is over, follow further [instructions to configure it for
+Eclipse](http://docs.opencv.org/trunk/doc/tutorials/introduction/java_eclipse/java_eclipse.html).
+*(Tested with version 2.4.6. Look out! Will not work with OpenCV 3.x, as
+it contains [API-breaking changes](http://stackoverflow.com/a/25943085).)*
+
 ### Xuggle
 
 [Xuggle](http://www.xuggle.com) is required to read video files. We
