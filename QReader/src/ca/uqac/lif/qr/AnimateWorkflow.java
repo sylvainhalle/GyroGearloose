@@ -277,7 +277,7 @@ public class AnimateWorkflow extends FrontEnd
         .hasArg()
         .withDescription(
             "Set maximum frame size to x bits (default: 2000)")
-            .create("r");
+            .create("z");
     options.addOption(opt);
     opt = OptionBuilder
         .withLongOpt("noloop")

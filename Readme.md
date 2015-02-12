@@ -2,9 +2,9 @@ Gyro Gearloose: A QR-code manipulator
 =====================================
 
 <img src="http://forum.britishv8.org/file.php?2,file=10790"
- alt="Gyro Gearloose" float="right" />
+ alt="Gyro Gearloose" height="350" float="right" />
  
-(User Manual, version 2013-10-31)
+(User Manual, version 2015-02-12)
 
 These instructions are still under construction.
 
@@ -13,6 +13,7 @@ Table of contents                                                    {#toc}
 
 - [Dependencies](#dependencies)
 - [Compiling](#compiling)
+- [Command-line Usage](#cli)
 - [About the Author](#about)
 
 Dependencies                                                {#dependencies}
@@ -32,6 +33,14 @@ you use:
 
 and do **not** create subfolders there (i.e. put all archives directly
 in that folder).
+
+### BufferTannen
+
+[BufferTannen](https://github.com/sylvainhalle/BufferTannen) is a library
+implementing a protocol for broadcast-only, low-bandwidth data streams. The
+contents of QR codes read and written by GyroGearloose are created using
+this protocol. Follow its installation instructions, and copy the resulting
+file `BufferTannen.jar` in the extension directory.
 
 ### OpenCV
 
@@ -145,10 +154,127 @@ subfolder.
 
 [Back to top](#toc)
 
+Command-line Usage                                                   {#cli}
+------------------
+
+GyroGearloose can be used in two modes: animate and read, which are
+described below.
+
+### Animate mode
+
+In the animate mode, the program takes as input as source of data (a file,
+pipe, etc.), and produces a sequence of QR codes. You can choose to display
+that sequence "live" in a window, or export it to an animated GIF. The
+general command-line syntax is the following:
+
+    java -jar GyroGearloose.jar animate [options] [file [schema1 [schema2 ...]]]
+
+The argument `file` is optional; it specifies the source file to read, and
+from which QR codes will be generated.
+
+The arguments `schema1`, etc. are also optional. The contain schema files
+that will be used to encode the contents of `file`.
+
+Command-line switches are:
+
+`--binary`
+:  Encode input file as BufferTannen blob segments (i.e., as a meaningless
+   stream of binary data)
+
+`--format <f>`
+:  Write codes using format f, which can either be
+   [qr](http://en.wikipedia.org/wiki/QR_code),
+   [aztec](http://en.wikipedia.org/wiki/Aztec_Code) or
+   [datamatrix](http://en.wikipedia.org/wiki/Data_Matrix). The default is
+   qr.
+
+`-h`, `--help`
+:  Display command line usage
+
+`-l`, `--level <x>`
+:  Set error correction level to x (either L (7%), M (15%), Q (25%), or H
+   (30%)). The default is L.
+
+`--lake`
+:  Display source contents in BufferTannen's "lake" mode
+
+`--noloop`
+:  Don't loop through frames when sending in lake mode
+
+`--output <file>`
+:  Output GIF animation to file. If not specified, the output is displayed
+   in a window onscreen
+
+`-p`, `--pipe`
+:  Specifies that the input file is a pipe (not a regular file)
+
+`-z`, `--framesize <x>`
+:  Set maximum frame size to x bits (default: 2000). This is not the
+   resolution of the code (i.e. number of pixels), but the amount of data
+   each code can contain at most.
+
+ `-r`, `--framerate <x>`
+ : Set animation speed to x codes per second (default: 8)
+
+`-s`, `--size <x>`
+: Set output image size to a square of side x pixels (default: 300)
+
+`--stdin`
+:  Read input from stdin
+
+### Read mode
+
+The read mode is the opposite of the animate mode: the program receives as
+input a sequence of pictures (either from a video file, or captured live
+from a camera), interprets the codes found in each picture, and outputs
+back the contents of the code stream.
+
+    java -jar GyroGearloose.jar read [options] [file]
+
+The `file` argument is optional. If specified, input will be read from that
+file, which can either be a video (MP4, AVI or MKV) or a sequence of images
+(in that case specify multiple file names). If not given, the input will be
+read from the USB camera.
+
+By default, the decoded contents are sent to the standard output. Use a
+redirection to save it to a file, or use the `--mute` option to discard it.
+    
+Command-line switches are:
+
+`--binary`
+:  Tells the reader that the codes contain BufferTannen blob segments
+
+`-h`, `--help`
+:  Display command line usage
+
+`--mute`
+:  Don't output decoded contents to stdout, just print stats. This option
+   is useful if one wants only to test the decoding, without caring about
+   the received contents.
+
+`--purecode`
+:  Tells reader that input is a set of pure binary images of codes
+
+`-r`, `--framerate <x>`
+:  When reading from a camera, process images at x fps (default: 8)
+
+`--threshold <x>`
+:  Set binarization threshold to x ('guess', or between 0 and 255, default
+   128). Binarization is the process of converting a colour image to a
+   strictly black-and-white (i.e. 1-bit) image before processing its
+   contents. The threshold is the maximum amount of brightness a pixel can
+   have to be converted to full-black; otherwise it will become full-white.
+   The `guess` option has the program attempt to find the threshold that
+   maximizes the probability of finding a code in each picture. This
+   consumes much more time and CPU than using a fixed value.
+
+`--verbosity <x>`
+:  Verbose messages with level x
+
 About the Author                                                   {#about}
 ----------------
 
-Gyro Gearloose is developed by Sylvain Hallé, currently an Assistant
+Gyro Gearloose is developed by Sylvain Hallé, currently an Associate
 Professor at [Université du Québec à Chicoutimi,
 Canada](http://www.uqac.ca/) and head of [LIF](http://lif.uqac.ca/), the
 Laboratory of Formal Computer Science ("Laboratoire d'informatique
