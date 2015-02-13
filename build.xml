@@ -9,6 +9,10 @@
   <property name="lib" location="QReader/lib"/>
   <property name="dist"  location="."/>
   
+  <!-- Location of the OpenCV JAR.
+   Modify according to your own file and folder -->
+  <property name="opencv.jar.location" value="/usr/local/share/OpenCV/java/opencv-249.jar"/>
+  
   <target name="init">
     <!-- Create the time stamp -->
     <tstamp/>
@@ -31,7 +35,7 @@
         <jar destfile="${dist}/GyroGearloose.jar" filesetmanifest="mergewithoutmain">
             <manifest>
                 <attribute name="Main-Class" value="ca.uqac.lif.qr.FrontEnd"/>
-                <attribute name="Class-Path" value="."/>
+                <attribute name="Class-Path" value=". ${opencv.jar.location}"/>
             </manifest>
             <fileset dir="${build}"/>
             <!-- <zipfileset excludes="META-INF/*.SF" src="${lib}/BufferTannen.jar"/> -->
