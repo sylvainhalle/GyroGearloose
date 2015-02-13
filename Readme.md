@@ -42,6 +42,13 @@ contents of QR codes read and written by GyroGearloose are created using
 this protocol. Follow its installation instructions, and copy the resulting
 file `BufferTannen.jar` in the extension directory.
 
+### Zxing
+
+[Zxing](https://github.com/zxing/zxing) is a library that allows one to
+create QR codes from contents, and to decode QR codes from an image.
+Precompiled JAR files can be [downloaded](https://github.com/zxing/zxing/wiki/Getting-Started-Developing).
+Look for a file in the "core" folder. *(Tested with version 2.3)*
+
 ### OpenCV
 
 [OpenCV](http://opencv.org/downloads.html) is required to use a camera. This
@@ -175,52 +182,59 @@ from which QR codes will be generated.
 The arguments `schema1`, etc. are also optional. The contain schema files
 that will be used to encode the contents of `file`.
 
+When called without the `--file` option, the program will display an
+empty window. The animation of the source contents into QR codes can be
+started by pressing `S` on the keyboard; it can be paused/resumed by
+pressing `S`. The window can be resized; however this will only change the
+amount of white space around the code, and not resize the code itself.
+Closing the window at any moment closes the program.
+
 Command-line switches are:
 
 `--binary`
-:  Encode input file as BufferTannen blob segments (i.e., as a meaningless
-   stream of binary data)
+:   Encode input file as BufferTannen blob segments (i.e., as a meaningless
+    stream of binary data)
 
 `--format <f>`
-:  Write codes using format f, which can either be
-   [qr](http://en.wikipedia.org/wiki/QR_code),
-   [aztec](http://en.wikipedia.org/wiki/Aztec_Code) or
-   [datamatrix](http://en.wikipedia.org/wiki/Data_Matrix). The default is
-   qr.
+:   Write codes using format f, which can either be
+    [qr](http://en.wikipedia.org/wiki/QR_code),
+    [aztec](http://en.wikipedia.org/wiki/Aztec_Code) or
+    [datamatrix](http://en.wikipedia.org/wiki/Data_Matrix). The default is
+    qr.
 
 `-h`, `--help`
-:  Display command line usage
+:   Display command line usage
 
 `-l`, `--level <x>`
-:  Set error correction level to x (either L (7%), M (15%), Q (25%), or H
-   (30%)). The default is L.
+:   Set error correction level to x (either L (7%), M (15%), Q (25%), or H
+    (30%)). The default is L.
 
 `--lake`
-:  Display source contents in BufferTannen's "lake" mode
+:   Display source contents in BufferTannen's "lake" mode
 
 `--noloop`
-:  Don't loop through frames when sending in lake mode
+:   Don't loop through frames when sending in lake mode
 
 `--output <file>`
-:  Output GIF animation to file. If not specified, the output is displayed
-   in a window onscreen
+:   Output GIF animation to file. If not specified, the output is displayed
+    in a window onscreen
 
 `-p`, `--pipe`
-:  Specifies that the input file is a pipe (not a regular file)
+:   Specifies that the input file is a pipe (not a regular file)
 
 `-z`, `--framesize <x>`
-:  Set maximum frame size to x bits (default: 2000). This is not the
-   resolution of the code (i.e. number of pixels), but the amount of data
-   each code can contain at most.
+:   Set maximum frame size to x bits (default: 2000). This is not the
+    resolution of the code (i.e. number of pixels), but the amount of data
+    each code can contain at most.
 
  `-r`, `--framerate <x>`
- : Set animation speed to x codes per second (default: 8)
+:   Set animation speed to x codes per second (default: 8)
 
 `-s`, `--size <x>`
-: Set output image size to a square of side x pixels (default: 300)
+:   Set output image size to a square of side x pixels (default: 300)
 
 `--stdin`
-:  Read input from stdin
+:   Read input from stdin
 
 ### Read mode
 
@@ -229,7 +243,14 @@ input a sequence of pictures (either from a video file, or captured live
 from a camera), interprets the codes found in each picture, and outputs
 back the contents of the code stream.
 
-    java -jar GyroGearloose.jar read [options] [file]
+    java -Djava.library.path=%LIBPATH% -jar GyroGearloose.jar read [options] [file]
+
+where `%LIBPATH%` must be replaced by the location of the *native* library
+folder where OpenCV resides (the same folder you used for the OpenCV Eclipse
+configuration in the instructions above; in Linux this is typically
+`/usr/local/share/OpenCV/java`). Alas, there is no way to put this parameter
+in some configuration file as it is system-dependent; you may want to
+consider creating a batch file.
 
 The `file` argument is optional. If specified, input will be read from that
 file, which can either be a video (MP4, AVI or MKV) or a sequence of images
@@ -242,34 +263,36 @@ redirection to save it to a file, or use the `--mute` option to discard it.
 Command-line switches are:
 
 `--binary`
-:  Tells the reader that the codes contain BufferTannen blob segments
+:   Tells the reader that the codes contain BufferTannen blob segments
 
 `-h`, `--help`
-:  Display command line usage
+:   Display command line usage
 
 `--mute`
-:  Don't output decoded contents to stdout, just print stats. This option
-   is useful if one wants only to test the decoding, without caring about
-   the received contents.
+:   Don't output decoded contents to stdout, just print stats. This option
+    is useful if one wants only to test the decoding, without caring about
+    the received contents.
 
 `--purecode`
-:  Tells reader that input is a set of pure binary images of codes
+:   Tells reader that input is a set of pure binary images of codes
 
 `-r`, `--framerate <x>`
-:  When reading from a camera, process images at x fps (default: 8)
+:   When reading from a camera, process images at x fps (default: 8)
 
 `--threshold <x>`
-:  Set binarization threshold to x ('guess', or between 0 and 255, default
-   128). Binarization is the process of converting a colour image to a
-   strictly black-and-white (i.e. 1-bit) image before processing its
-   contents. The threshold is the maximum amount of brightness a pixel can
-   have to be converted to full-black; otherwise it will become full-white.
-   The `guess` option has the program attempt to find the threshold that
-   maximizes the probability of finding a code in each picture. This
-   consumes much more time and CPU than using a fixed value.
+:   Set binarization threshold to x ('guess', or between 0 and 255, default
+    128). Binarization is the process of converting a colour image to a
+    strictly black-and-white (i.e. 1-bit) image before processing its
+    contents. The threshold is the maximum amount of brightness a pixel can
+    have to be converted to full-black; otherwise it will become full-white.
+    The `guess` option has the program attempt to find the threshold that
+    maximizes the probability of finding a code in each picture. This
+    consumes much more time and CPU than using a fixed value.
 
 `--verbosity <x>`
-:  Verbose messages with level x
+:   Verbose messages with level x
+
+[Back to top](#toc)
 
 About the Author                                                   {#about}
 ----------------

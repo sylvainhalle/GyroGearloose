@@ -105,7 +105,6 @@ public class AnimateWorkflow extends FrontEnd
     if (c_line.hasOption("framerate"))
     {
       frame_rate = Integer.parseInt(c_line.getOptionValue("framerate"));
-      encoder.setFramerate(frame_rate);
     }
     if (c_line.hasOption("resourceid"))
     {
@@ -210,6 +209,7 @@ public class AnimateWorkflow extends FrontEnd
     // Setup frame encoder
     encoder.setSender(sender);
     encoder.setInputStream(in);
+    encoder.setFramerate(frame_rate);
 
     if (output_filename.isEmpty())
     {

@@ -7,7 +7,7 @@
   <property name="src" location="QReader/src"/>
   <property name="build" location="QReader/bin"/>
   <property name="lib" location="QReader/lib"/>
-  <property name="dist"  location="QReader/dist"/>
+  <property name="dist"  location="."/>
   
   <target name="init">
     <!-- Create the time stamp -->
@@ -22,20 +22,19 @@
   <javac
       srcdir="${src}"
       destdir="${build}"
-      classpath=".:${lib}/BufferTannen.jar"
       includeantruntime="false" />
   </target>
   
     <!--this file was created by Eclipse Runnable JAR Export Wizard-->
     <!--ANT 1.7 is required                                        -->
     <target name="create_run_jar" depends="compile">
-        <jar destfile="${dist}/QRTranslator.jar" filesetmanifest="mergewithoutmain">
+        <jar destfile="${dist}/GyroGearloose.jar" filesetmanifest="mergewithoutmain">
             <manifest>
                 <attribute name="Main-Class" value="ca.uqac.lif.qr.FrontEnd"/>
                 <attribute name="Class-Path" value="."/>
             </manifest>
             <fileset dir="${build}"/>
-            <zipfileset excludes="META-INF/*.SF" src="${lib}/BufferTannen.jar"/>
+            <!-- <zipfileset excludes="META-INF/*.SF" src="${lib}/BufferTannen.jar"/> -->
         </jar>
     </target>
     
