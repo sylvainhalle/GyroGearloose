@@ -6,6 +6,9 @@ Gyro Gearloose: A QR-code manipulator
  
 (User Manual, version 2015-02-12)
 
+**See a [demo video](http://youtu.be/GSL0md0TlY8) of GyroGearloose in
+action!**
+
 These instructions are still under construction.
 
 Table of contents                                                    {#toc}
