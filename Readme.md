@@ -130,7 +130,7 @@ you're a Java developer.
 
 [Back to top](#toc)
 
-Compiling
+Compiling                                                      {#compiling}
 ---------
 
 Once the dependencies are all installed, make sure you also have the
